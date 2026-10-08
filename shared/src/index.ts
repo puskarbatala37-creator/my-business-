@@ -106,5 +106,7 @@ export interface LiveEvent {
   actor: { id: number; name: string } | null;
   ids?: number[];
   message?: string;
+  /** For alert events. */
+  severity?: 'info' | 'warning' | 'critical';
   at: string;
 }

@@ -219,7 +219,8 @@ export function parseOrderSpeech(transcript: string, catalog: VoiceCatalogVarian
     const hit = findAny(tokens, keywords);
     if (!hit) return undefined;
     let i = hit.index + hit.length;
-    if (tokens[i] === 'is' || tokens[i] === 'हो') i++;
+    // "customer name is Sita" – skip the remaining keyword / filler words
+    while (i < tokens.length && (keywords.includes(tokens[i]) || ['is', 'हो', 'को', ':'].includes(tokens[i]))) i++;
     const words: string[] = [];
     while (i < tokens.length && words.length < max && !stop.has(tokens[i]) && !isNum(tokens[i])) {
       used.add(i);
@@ -272,7 +273,7 @@ export function parseOrderSpeech(transcript: string, catalog: VoiceCatalogVarian
   const amountNear = (hitIndex: number, len: number) => {
     // Prefer a number right after the keyword, then right before it.
     // Nepali puts the verb last ("२००० तिर्यो"), English puts it first ("paid 2000").
-    const verbLast = isDevanagari(tokens[hitIndex] ?? '');
+    const verbLast = isDevanagari(tokens[hitIndex] ?? '') || L.VERB_LAST_LATIN.has(tokens[hitIndex] ?? '');
     const order = verbLast
       ? [hitIndex - 1, hitIndex + len, hitIndex - 2, hitIndex + len + 1]
       : [hitIndex + len, hitIndex - 1, hitIndex + len + 1, hitIndex - 2];
@@ -286,20 +287,22 @@ export function parseOrderSpeech(transcript: string, catalog: VoiceCatalogVarian
   };
   const cod = findAny(tokens, L.PAYMENT.cod);
   const partial = findAny(tokens, L.PAYMENT.partial);
-  const paid = findAny(tokens, L.PAYMENT.paid);
+  let paid = findAny(tokens, L.PAYMENT.paid);
+  // "not paid" / "तिरेको छैन": the paid word inside a COD phrase doesn't count.
+  if (paid && cod && paid.index >= cod.index && paid.index < cod.index + cod.length) paid = null;
   const remaining = findAny(tokens, L.PAYMENT.remaining);
   if (partial) {
     draft.payment.status = 'partial';
     draft.payment.amount = amountNear(partial.index, partial.length);
-  } else if (cod) {
+  } else if (cod && !paid) {
     draft.payment.status = 'unpaid';
   } else if (paid) {
     const amount = amountNear(paid.index, paid.length);
-    if (remaining && amount !== undefined) {
-      // "1000 तिर्यो 2000 बाँकी" → partial
+    if ((remaining || cod) && amount !== undefined) {
+      // "1000 तिर्यो 2000 बाँकी" / "paid 1000, rest cash on delivery" → partial
       draft.payment.status = 'partial';
       draft.payment.amount = amount;
-      amountNear(remaining.index, remaining.length);
+      if (remaining) amountNear(remaining.index, remaining.length);
     } else {
       draft.payment.status = 'paid';
       if (amount !== undefined) draft.payment.amount = amount;

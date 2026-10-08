@@ -6,6 +6,7 @@ import { CustomerPage, CustomersPage } from './features/customers/CustomersPage'
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { MorePage } from './features/more/MorePage';
 import { SecurityPage } from './features/more/SecurityPage';
+import { TeamPage } from './features/more/TeamPage';
 import { InvoicePage } from './features/orders/InvoicePage';
 import { OrderDetailPage } from './features/orders/OrderDetailPage';
 import { OrderFormPage } from './features/orders/OrderFormPage';
@@ -51,6 +52,7 @@ export function App() {
         <Route path="receipts" element={<ReceiptsPage />} />
         <Route path="more" element={<MorePage />} />
         <Route path="more/security" element={<SecurityPage />} />
+        <Route path="more/team" element={<TeamPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

@@ -81,3 +81,47 @@ describe('payment amount next to the keyword', () => {
     expect(d.items[0].unit_price).toBe(3500);
   });
 });
+
+describe('speak in whichever language feels natural', () => {
+  it('plain English', () => {
+    const d = parseOrderSpeech('one blue sari 3500 rupees, advance 1000 by esewa, delivery tomorrow, takes 2 days to prepare, customer name Sita Sharma phone 9841234567', catalog, TODAY);
+    expect(d.items[0]).toMatchObject({ variant_id: 2, quantity: 1, unit_price: 3500 });
+    expect(d.payment).toEqual({ status: 'partial', amount: 1000, method: 'esewa' });
+    expect(d.delivery_due_date).toBe('2026-10-09');
+    expect(d.prep_time_days).toBe(2);
+    expect(d.customer).toMatchObject({ name: 'Sita Sharma', phone: '9841234567' });
+  });
+
+  it('Nepali heard by the English recogniser (romanised)', () => {
+    const d = parseOrderSpeech('dui wota nilo sadi tin hajar paanch saya, 2000 tiryo baki COD, bholi pathaune', catalog, TODAY);
+    expect(d.items[0]).toMatchObject({ variant_id: 2, quantity: 2, unit_price: 3500 });
+    expect(d.payment).toMatchObject({ status: 'partial', amount: 2000 });
+    expect(d.delivery_due_date).toBe('2026-10-09');
+  });
+
+  it('English words inside Nepali speech (Devanagari loanwords)', () => {
+    const d = parseOrderSpeech('ब्ल्याक कुर्था टु पीस, फुल पेड खल्ती, फ्राइडे डेलिभरी', catalog, TODAY);
+    expect(d.items[0]).toMatchObject({ variant_id: 5, quantity: 2, unit_price: 1800 });
+    expect(d.payment).toMatchObject({ status: 'paid', method: 'khalti' });
+    expect(d.delivery_due_date).toBe('2026-10-09');
+  });
+
+  it('switching language half-way through one order', () => {
+    const d = parseOrderSpeech('कालो कुर्था एउटा 1800 रुपैयाँ and one blue sari 3500, cash on delivery, पर्सि डेलिभरी', catalog, TODAY);
+    expect(d.items.map((i) => [i.variant_id, i.unit_price])).toEqual([
+      [5, 1800],
+      [2, 3500],
+    ]);
+    expect(d.payment.status).toBe('unpaid');
+    expect(d.delivery_due_date).toBe('2026-10-10');
+  });
+});
+
+describe('COD phrases that contain the word "paid"', () => {
+  it.each(['black kurta not paid yet', 'कालो कुर्था पैसा तिरेको छैन', 'kalo kurtha tireko chhaina'])('%s → unpaid', (t) => {
+    expect(parseOrderSpeech(t, catalog, TODAY).payment.status).toBe('unpaid');
+  });
+  it('"paid 1000, rest cash on delivery" → partial', () => {
+    expect(parseOrderSpeech('black kurta 1800, paid 1000, rest cash on delivery', catalog, TODAY).payment).toMatchObject({ status: 'partial', amount: 1000 });
+  });
+});

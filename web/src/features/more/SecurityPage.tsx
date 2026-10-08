@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { Empty, Spinner, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { dateTime } from '../../lib/format';
-import { enablePush, pushEnabled, pushSupported } from '../../lib/push';
+import { biometricAvailable, biometricEnrolledHere, biometricName, enrollBiometric, forgetBiometricHere } from '../../lib/biometric';
+import { enablePush, pushEnabled } from '../../lib/push';
 import type { Alert } from '../../lib/types';
 
 interface SessionRow {
@@ -25,6 +26,12 @@ export function SecurityPage() {
   const alerts = useQuery({ queryKey: ['alerts'], queryFn: () => api.get<{ alerts: Alert[]; unread: number }>('/api/security/alerts') });
   const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => api.get<{ sessions: SessionRow[] }>('/api/security/sessions') });
   const [push, setPush] = useState<boolean | null>(null);
+  const passkeys = useQuery({ queryKey: ['passkeys'], queryFn: () => api.get<{ passkeys: { id: number; label: string; created_at: string; last_used_at: string | null }[] }>('/api/auth/passkeys') });
+  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioHere, setBioHere] = useState(biometricEnrolledHere());
+  useEffect(() => {
+    biometricAvailable().then(setBioAvailable);
+  }, []);
 
   useEffect(() => {
     pushEnabled().then(setPush);
@@ -38,6 +45,63 @@ export function SecurityPage() {
     <>
       <TopBar title="Security" back="/more" />
       <main className="page stack" style={{ paddingTop: 12 }}>
+        <section className="card stack">
+          <h2>Fingerprint / face sign-in</h2>
+          <div className="small muted">Sign in with {biometricName} instead of typing your password. Your password still works as a backup.</div>
+          {bioAvailable ? (
+            bioHere ? (
+              <div className="badge good">On for this phone</div>
+            ) : (
+              <button
+                className="btn primary"
+                onClick={async () => {
+                  try {
+                    await enrollBiometric();
+                    setBioHere(true);
+                    passkeys.refetch();
+                    toast(`${biometricName} sign-in is on`);
+                  } catch (e) {
+                    toast((e as Error).message, true);
+                  }
+                }}
+              >
+                Turn on {biometricName}
+              </button>
+            )
+          ) : (
+            <div className="small">This device has no fingerprint or face sensor the browser can use (or it isn’t set up in the phone’s settings).</div>
+          )}
+          {!!passkeys.data?.passkeys.length && (
+            <div className="list">
+              {passkeys.data.passkeys.map((k) => (
+                <div key={k.id} className="list-item">
+                  <div className="grow">
+                    <div className="strong small">{k.label || 'Device'}</div>
+                    <div className="tiny muted">
+                      Added {dateTime(k.created_at)}
+                      {k.last_used_at && ` · last used ${dateTime(k.last_used_at)}`}
+                    </div>
+                  </div>
+                  <button
+                    className="btn sm danger"
+                    onClick={async () => {
+                      if (!confirm('Remove fingerprint / face sign-in for this device?')) return;
+                      await api.del(`/api/auth/passkeys/${k.id}`);
+                      if (passkeys.data!.passkeys.length === 1) {
+                        forgetBiometricHere();
+                        setBioHere(false);
+                      }
+                      passkeys.refetch();
+                    }}
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+
         <section className="card stack">
           <h2>Phone notifications</h2>
           <div className="small muted">Get a notification on this phone when someone tries to break in or something unusual happens – even when Slay is closed.</div>

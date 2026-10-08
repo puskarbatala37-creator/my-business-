@@ -29,7 +29,7 @@ export function useVariantIndex() {
 
 /**
  * Bottom sheet to pick a product colour. Shows live stock; out-of-stock colours
- * can't be picked (stock updates instantly when the partner sells).
+ * can't be picked (stock updates instantly when a teammate sells).
  */
 export function VariantPicker({
   onPick,

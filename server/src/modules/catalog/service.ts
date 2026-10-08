@@ -172,7 +172,7 @@ export class CatalogService {
 
   /**
    * Takes stock for an order line. Runs inside the caller's transaction; the
-   * conditional UPDATE makes overselling impossible even if both partners sell
+   * conditional UPDATE makes overselling impossible even if two people sell
    * the last unit at the same moment.
    */
   take(variantId: number, qty: number, reason: StockReason, userId: number | null, orderId: number, orderItemId: number | null) {

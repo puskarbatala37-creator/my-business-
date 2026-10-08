@@ -13,6 +13,7 @@
     "user:password": "tsx src/cli/users.ts password"
   },
   "dependencies": {
+    "@simplewebauthn/server": "^13.3.3",
     "@slay/shared": "*",
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^12.4.1",

@@ -7,6 +7,7 @@ export interface AuthUser {
   id: number;
   username: string;
   displayName: string;
+  role: 'owner' | 'member';
   sessionId: number;
 }
 

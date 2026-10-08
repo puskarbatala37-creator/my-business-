@@ -37,7 +37,7 @@ export const securityModule: AppModule = {
       res.json({ ok: true });
     });
 
-    // Signed-in devices for both users – either partner can sign out a device they don't recognise.
+    // Signed-in devices for the whole team – anyone can sign out a device they don't recognise.
     r.get('/sessions', (req, res) => {
       const rows = ctx.db
         .prepare(

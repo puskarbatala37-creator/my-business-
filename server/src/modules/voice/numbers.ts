@@ -21,6 +21,15 @@ const NE_WORDS: Record<string, number> = {
   असी: 80, एकासी: 81, बयासी: 82, त्रियासी: 83, चौरासी: 84, पचासी: 85, छयासी: 86, सतासी: 87, अठासी: 88, उनान्नब्बे: 89,
   नब्बे: 90, एकान्नब्बे: 91, बयान्नब्बे: 92, त्रियान्नब्बे: 93, चौरान्नब्बे: 94, पन्चानब्बे: 95, छयान्नब्बे: 96, सन्तान्नब्बे: 97, अन्ठान्नब्बे: 98, उनान्सय: 99,
   डेढ: 1.5, अढाई: 2.5, साढे: 0.5,
+  // English said in Nepali script
+  वान: 1, टु: 2, थ्री: 3, फोर: 4, फाइभ: 5, सिक्स: 6, सेभेन: 7, एट: 8, नाइन: 9, टेन: 10,
+};
+
+/** Romanised Nepali numbers (from an English recogniser hearing Nepali). */
+const ROMAN_NE: Record<string, number> = {
+  ek: 1, euta: 1, dui: 2, duita: 2, tin: 3, teen: 3, char: 4, chaar: 4, panch: 5, paanch: 5, chha: 6, saat: 7, sat: 7, aath: 8, nau: 9, das: 10, dus: 10,
+  bis: 20, pachis: 25, tis: 30, chalis: 40, pachas: 50, sathi: 60, sattari: 70, asi: 80, nabbe: 90,
+  dedh: 1.5, dhedh: 1.5, adhai: 2.5,
 };
 
 const EN_WORDS: Record<string, number> = {
@@ -30,19 +39,19 @@ const EN_WORDS: Record<string, number> = {
 };
 
 const MULTIPLIERS: Record<string, number> = {
-  सय: 100, सये: 100, hundred: 100,
-  हजार: 1000, thousand: 1000, k: 1000,
+  सय: 100, सये: 100, hundred: 100, saya: 100, say: 100, हन्ड्रेड: 100,
+  हजार: 1000, thousand: 1000, k: 1000, hajar: 1000, hazar: 1000, hajaar: 1000, थाउजेन्ड: 1000,
   लाख: 100000, lakh: 100000, lac: 100000,
 };
 
-export const COUNTER_WORDS = ['वटा', 'ओटा', 'थान', 'पिस', 'pcs', 'pc', 'piece', 'pieces', 'ota', 'wota', 'than'];
+export const COUNTER_WORDS = ['वटा', 'ओटा', 'थान', 'पिस', 'पीस', 'pcs', 'pc', 'piece', 'pieces', 'ota', 'wota', 'vata', 'wata', 'ta', 'than', 'thaan', 'पिसेज'];
 
 /** Words that are numbers only when followed by a counter/multiplier ("छ" also means "is"). */
-const AMBIGUOUS = new Set(['छ', 'a', 'an', 'नौ']);
+const AMBIGUOUS = new Set(['छ', 'a', 'an', 'नौ', 'chha', 'tin', 'sat', 'say', 'char', 'ek', 'टु', 'एट']);
 
 function wordValue(tok: string): number | undefined {
   if (/^\d+(\.\d+)?$/.test(tok)) return Number(tok);
-  return NE_WORDS[tok] ?? EN_WORDS[tok.toLowerCase()];
+  return NE_WORDS[tok] ?? EN_WORDS[tok.toLowerCase()] ?? ROMAN_NE[tok.toLowerCase()];
 }
 
 /**
@@ -86,7 +95,7 @@ export function normalizeNumbers(text: string): string {
       continue;
     }
     const mult = MULTIPLIERS[tok] ?? MULTIPLIERS[lower];
-    if (mult && (phrase || tok === 'हजार' || tok === 'सय' || lower === 'thousand' || lower === 'hundred')) {
+    if (mult && (phrase || ['हजार', 'सय', 'thousand', 'hundred', 'hajar', 'hazar', 'saya'].includes(lower))) {
       if (!phrase) phrase = { total: 0, current: 0, half: false, afterMult: false };
       if (mult >= 1000) {
         phrase.total += (phrase.current || 1) * mult;

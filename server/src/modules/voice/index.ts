@@ -45,8 +45,10 @@ export const voiceModule: AppModule = {
       const ext = type.includes('mp4') || type.includes('m4a') ? 'm4a' : type.includes('ogg') ? 'ogg' : type.includes('wav') ? 'wav' : 'webm';
       form.append('file', new Blob([new Uint8Array(req.file.buffer)], { type }), `speech.${ext}`);
       form.append('model', model);
-      form.append('language', String(req.body?.language || 'ne').slice(0, 5));
-      form.append('prompt', 'साडी, कुर्था, रातो, निलो, वटा, रुपैयाँ, एडभान्स, इसेवा, भोलि डेलिभरी, तयार गर्न दिन');
+      // "auto" lets the model detect Nepali, English or a mix of both.
+      const language = String(req.body?.language || 'auto').slice(0, 5);
+      if (language !== 'auto') form.append('language', language);
+      form.append('prompt', 'Order: रातो साडी दुई वटा, 3500 rupees, एडभान्स 1000 eSewa, भोलि डेलिभरी, black kurta, paid, cash on delivery.');
       const resp = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form, signal: AbortSignal.timeout(60_000) });
       if (!resp.ok) throw new HttpError(502, `Speech-to-text failed (${resp.status})`);
       const data = (await resp.json()) as { text?: string };

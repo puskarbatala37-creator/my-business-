@@ -38,6 +38,13 @@ export interface Config {
     model: string;
   };
   alertWebhookUrl: string;
+  webauthn: {
+    rpName: string;
+    /** Domain the passkeys belong to (hostname of APP_URL). */
+    rpID: string;
+    /** Origins allowed to use passkeys. */
+    origins: string[];
+  };
   vapidSubject: string;
 }
 
@@ -89,7 +96,17 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     },
     alertWebhookUrl: env('ALERT_WEBHOOK_URL'),
     vapidSubject: env('VAPID_SUBJECT', 'mailto:admin@example.com'),
+    webauthn: { rpName: 'Slay', rpID: '', origins: [] },
     ...overrides,
   };
+  if (!overrides.webauthn) {
+    const extra = env('WEBAUTHN_ORIGINS').split(',').map((o) => o.trim().replace(/\/$/, '')).filter(Boolean);
+    const dev = isProduction ? [] : [`http://localhost:${port}`, 'http://localhost:5173'];
+    cfg.webauthn = {
+      rpName: 'Slay',
+      rpID: env('WEBAUTHN_RP_ID', new URL(cfg.appUrl).hostname),
+      origins: [...new Set([cfg.appUrl, ...extra, ...dev])],
+    };
+  }
   return cfg;
 }

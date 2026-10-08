@@ -4,6 +4,14 @@ export interface User {
   id: number;
   username: string;
   displayName: string;
+  role: 'owner' | 'member';
+}
+
+export interface TeamMember extends User {
+  active: boolean;
+  created_at: string;
+  last_seen_at: string | null;
+  passkeys: number;
 }
 
 export interface Variant {

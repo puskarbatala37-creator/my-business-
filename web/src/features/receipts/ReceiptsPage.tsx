@@ -198,7 +198,7 @@ function ReceiptView({ r, onClose }: { r: Receipt; onClose: () => void }) {
         <button
           className="btn danger block"
           onClick={async () => {
-            if (!confirm('Delete this bill? Your partner will be notified.')) return;
+            if (!confirm('Delete this bill? The team will be notified.')) return;
             try {
               await api.del(`/api/receipts/${r.id}`);
               qc.invalidateQueries({ queryKey: ['receipts'] });

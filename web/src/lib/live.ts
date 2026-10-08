@@ -15,7 +15,7 @@ const INVALIDATES: Record<string, string[][]> = {
 };
 
 /**
- * Keeps this phone in sync with the partner's: listens to the server's event
+ * Keeps this phone in sync with the rest of the team's: listens to the server's event
  * stream and refreshes affected data instantly. Reconnects automatically and
  * refreshes everything after coming back online / to the foreground.
  */

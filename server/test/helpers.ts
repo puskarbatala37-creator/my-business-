@@ -16,8 +16,8 @@ export function setup() {
   });
   const created = createApp(config);
   const auth = service<AuthService>(created.ctx, 'auth');
-  auth.createUser('teza', 'Teza', 'password-teza');
-  auth.createUser('partner', 'Partner', 'password-partner');
+  auth.createUser('teza', 'Teza', 'password-teza', 'owner');
+  auth.createUser('partner', 'Partner', 'password-partner', 'owner');
   return { ...created, config };
 }
 

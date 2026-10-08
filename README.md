@@ -1,6 +1,6 @@
 # Slay – orders & stock
 
-Order and inventory management for a two-person weekend clothing business that sells on Instagram, Facebook and TikTok.
+Order and inventory management for a small clothing business that sells on Instagram, Facebook and TikTok. It is built for any size of team, not just two people.
 It runs as an installable mobile web app (PWA), so one codebase works on **Android and iPhone**. Open it in the browser and choose
 **Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: ⋮ → Install app). It then opens full-screen like a normal app.
 
@@ -8,15 +8,16 @@ It runs as an installable mobile web app (PWA), so one codebase works on **Andro
 
 | Area | Highlights |
 |---|---|
-| **Logins** | Two separate accounts (username + password, bcrypt-hashed, http-only session cookie). |
-| **Real-time sync** | Every change is pushed to both phones instantly (Server-Sent Events). If one partner sells the last unit, it shows as out of stock on the other phone right away. The server also checks stock inside a database transaction, so the same item can never be sold twice, even if both partners tap "Save" at the same moment. |
+| **Logins** | **Fingerprint or face recognition is the main way to sign in** (Face ID / Touch ID on iPhone, fingerprint or face unlock on Android) on any phone that supports it. **Username + password is always the fallback.** After the first password sign-in on a phone, the app offers to turn on biometrics. Biometric data never leaves the phone: it uses standard passkeys (WebAuthn), and the server only receives a cryptographic confirmation. |
+| **Team** | As many accounts as you need. To add someone, an owner opens **More → Team → Add team member** and enters a name, username and password. That's all. **Owners** can add people, reset passwords, and switch accounts off or back on. **Members** can do all the daily work (orders, stock, bills). Switching someone off signs them out everywhere immediately, and their past orders are kept. |
+| **Real-time sync** | Every change is pushed to every team member's phone instantly (Server-Sent Events). If someone sells the last unit, it shows as out of stock on everyone else's phone right away. The server also checks stock inside a database transaction, so the same item can never be sold twice, even if two people tap "Save" at the same moment. |
 | **Catalog** | Category (e.g. *Sari*) → product/design (e.g. *Banarasi Silk*) → **colour variants**, each with its own stock count, photo, cost and selling price. Stock goes down automatically when an order is saved, and goes back up when an order is edited or cancelled. Every stock change is logged. |
 | **Orders (invoices)** | Automatic invoice numbers (`SLAY-2026-0001`), order date, customer contact details with full order history, items (product + colour, qty, size, price, photo), notes, delivery tracking number, delivery due date, prep time, delivery charge and discount. **Payment:** paid in full / partially paid (shows paid *and* still owed) / unpaid (COD), with amount and method. **Fulfilment:** pending / sent. Includes a printable and shareable invoice. |
-| **Voice entry (Nepali)** | Speak an order such as *"बनारसी रातो साडी दुई वटा ३५०० रुपैयाँ, एक हजार एडभान्स इसेवा, भोलि डेलिभरी, तयार गर्न दुई दिन, नाम सीता शर्मा फोन ९८४…"* and the form fills itself: item, qty, price, payment status, amount and method, delivery due date, prep time, customer name and phone. You always check the result before saving. |
+| **Voice entry (Nepali + English)** | Speak in **Nepali, English, or a mix**, whichever feels natural at the time. You can switch language with one tap, even while recording, and the text keeps building up. For example: *"बनारसी रातो साडी दुई वटा ३५०० रुपैयाँ, एक हजार एडभान्स इसेवा, भोलि डेलिभरी"*, or *"two blue saris 3500 each, paid 2000 by eSewa, rest cash on delivery, delivery Friday"*, or a mix of both in one order. The form fills itself: item, qty, size, price, payment status, amount and method, delivery due date, prep time, customer name and phone. The parser also understands English words spoken in Nepali (ब्ल्याक, फुल पेड, टुमोरो) and Nepali heard by the English recogniser (*rato sadi, dui wota, bholi, 2000 tiryo*). You always check the result before saving. |
 | **Dashboard** | Sales for today, this month and the last 6 months, plus monthly and daily charts, profit (sales − item cost), money still to collect, orders to send, deliveries due soon, and low stock. |
 | **Supplier bills** | Snap a photo of a supplier bill. It is timestamped automatically and is searchable by supplier, text and date, with spend totals for working out profit later. |
 | **eSewa** | "Send eSewa payment link" on any order with money owed. The customer pays on eSewa; the server checks the signature, **confirms the payment directly with eSewa's status API**, and marks the order paid. If the customer never comes back to the page, a background job still catches the payment. Uses eSewa's sandbox (test mode) until you switch to production. |
-| **Security alerts** | Both partners are notified (in the app, as a phone notification, and optionally via a webhook) about: repeated wrong passwords, account lockout (5 wrong attempts → 15 min), sign-ins from a new device, password changes, cancelling a paid order, many cancellations in an hour, large manual stock removals, and deleted supplier bills. Either partner can see every signed-in device and sign one out. |
+| **Security alerts** | Every team member is notified (in the app, as a phone notification, and optionally via a webhook) about: repeated wrong passwords, account lockout (5 wrong attempts → 15 min), sign-ins from a new device, password changes, team members being added, switched off or having their password reset, biometric login being turned on, cancelling a paid order, many cancellations in an hour, large manual stock removals, and deleted supplier bills. Anyone on the team can see every signed-in device and sign one out. |
 
 Returns and exchanges are not built yet, but the data model is ready for them (see *Extending* below).
 
@@ -26,13 +27,14 @@ Requires **Node.js 20.12+** (22 recommended).
 
 ```bash
 npm install
-npm run user:create -- teza "Teza"          # asks for a password (8+ characters)
-npm run user:create -- partner "Partner"
 npm run dev                                  # API on :3000, app on http://localhost:5173
 ```
 
+**First start:** open the app. It asks you to create the first **owner** account, using a 6-digit setup code that the server prints in its log. The code stops anyone else who finds the new site first from claiming it. After that, add everyone else in the app under **More → Team**. No command line is needed.
+(You can also use the command line: `npm run user:create -- teza "Teza" owner`.)
+
 To test on your phone during development, open `http://<your-computer-ip>:5173` on the same Wi-Fi.
-(Voice input and notifications need HTTPS on a phone, so test those on a deployed copy.)
+(Voice input, notifications and fingerprint/face sign-in need HTTPS on a phone, so test those on a deployed copy.)
 
 **Tests:** `npm test` covers stock and overselling, order editing and cancelling, payments, the dashboard, receipts, security alerts, the eSewa flow (with a mocked eSewa API), and the Nepali voice parser. **Type check:** `npm run typecheck`.
 
@@ -50,7 +52,9 @@ Or use Docker: `docker build -t slay . && docker run -p 3000:3000 -v slay-data:/
 Any host that runs Node or Docker and keeps a **persistent disk** will work: a small VPS, Railway, Render or Fly.io with a volume. Put it behind HTTPS, which these hosts usually provide. All data lives in `DATA_DIR`: the SQLite database plus uploaded photos. **Back up that folder.**
 See `.env.example` for every setting.
 
-To create users on a server: `cd server && node dist/cli/users.js create teza "Teza"`. To reset a password: `node dist/cli/users.js password teza`.
+Team members are normally managed in the app. If every owner is locked out, the command line still works on the server: `node dist/cli/users.js create <username> "<Name>" owner`, or `node dist/cli/users.js password <username>` to reset a password.
+
+**Fingerprint / face sign-in and your domain:** passkeys are tied to the web address in `APP_URL`. If you move the app to a different domain, everyone signs in once with their password and turns biometrics on again. Nothing else is lost.
 
 ### Going live with eSewa
 
@@ -62,11 +66,12 @@ In test mode, use eSewa's published sandbox test accounts to pay. The integratio
 
 ### Voice entry: how it works on each phone
 
-- **Android (Chrome):** the phone's own speech recognition understands Nepali (`ne-NP`). It is free and needs no setup.
-- **iPhone:** Safari's built-in recognition does not support Nepali. Either:
+- **Android (Chrome):** the phone's own speech recognition handles both Nepali (`ne-NP`) and English, free and with no setup. Tap **नेपाली** or **English** at any time, even mid-sentence, and recognition continues in that language.
+- **iPhone:** English works with the phone's own recognition. Safari can't recognise Nepali itself, so either:
   - set `TRANSCRIBE_API_KEY` (any Whisper-compatible speech-to-text API) so recordings are converted on the server, or
   - tap the text box and use the keyboard's mic. Gboard supports Nepali voice typing on iPhone and Android.
-- Either way, the text goes to the same parser. Teach it shop-specific words, such as a design name or a colour nickname, through the **Voice words** fields on categories, products and colours. No code changes are needed.
+- **Auto / mixed:** when `TRANSCRIBE_API_KEY` is set, an extra **Auto / mixed** option appears. The server works out which language, or mix of languages, was spoken, so no switching is needed.
+- Whichever route the speech takes, the text goes to the same parser, which understands Nepali, English and a mix of both. Teach it shop-specific words, such as a design name or a colour nickname, through the **Voice words** fields on categories, products and colours. No code changes are needed.
 
 ## Architecture
 
@@ -76,7 +81,7 @@ server/   Node + Express + SQLite (better-sqlite3)
   src/core/        module system, event bus (live sync), HTTP helpers
   src/db/          connection + ordered migrations
   src/modules/     one folder per feature – each owns its routes and service:
-                   auth, security, catalog, customers, orders, payments (eSewa),
+                   auth (passwords, passkeys, team), security, catalog, customers, orders, payments (eSewa),
                    receipts, dashboard, voice, uploads, live
 web/      React + TypeScript (Vite) installable PWA
   src/features/    one folder per screen area (orders, stock, receipts, …)
@@ -89,7 +94,7 @@ These choices are what make future changes cheap:
 - **Migrations.** Schema changes are new numbered files in `server/src/db/migrations`. They apply automatically on start, and existing data is kept.
 - **Pluggable providers.** Payment gateways implement one interface (`payments/provider.ts`), so adding Khalti or Fonepay means adding one class. File storage, speech-to-text and alert delivery are each isolated in a single place too.
 - **Ledgers, not overwritten numbers.** Stock changes (`stock_movements`) and money (`payments`) are append-only records, and totals are derived from them. That gives a full history and makes features like refunds straightforward.
-- **Optimistic locking.** If both partners edit the same order at once, the second save is refused with "reload to see the latest" instead of silently overwriting.
+- **Optimistic locking.** If two people edit the same order at once, the second save is refused with "reload to see the latest" instead of silently overwriting.
 
 ### Extending: returns & exchanges (planned)
 

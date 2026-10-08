@@ -9,7 +9,8 @@ import { useAuth } from '../../lib/auth';
 const LINKS = [
   { to: '/receipts', icon: 'receipt', label: 'Supplier bills', sub: 'Photos of stock & material purchases' },
   { to: '/customers', icon: 'users', label: 'Customers', sub: 'Contacts and order history' },
-  { to: '/more/security', icon: 'shield', label: 'Security', sub: 'Alerts, signed-in devices, notifications' },
+  { to: '/more/team', icon: 'team', label: 'Team', sub: 'Add team members, reset passwords' },
+  { to: '/more/security', icon: 'shield', label: 'Security', sub: 'Fingerprint / face sign-in, alerts, devices' },
 ];
 
 export function MorePage() {
@@ -37,7 +38,9 @@ export function MorePage() {
           <div className="list-item">
             <div className="grow">
               <div className="strong">{me?.user.displayName}</div>
-              <div className="small muted">Signed in as {me?.user.username}</div>
+              <div className="small muted">
+                Signed in as {me?.user.username} · {me?.user.role === 'owner' ? 'Owner' : 'Team member'}
+              </div>
             </div>
           </div>
           <button className="list-item" style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left' }} onClick={() => setPw(true)}>

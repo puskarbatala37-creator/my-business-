@@ -16,7 +16,7 @@ export interface AlertRow {
 }
 
 /**
- * Raises security / unusual-activity alerts and delivers them to BOTH users:
+ * Raises security / unusual-activity alerts and delivers them to EVERY team member:
  *  - stored in the database (shown in the app's alert bell)
  *  - pushed live to every open device (SSE)
  *  - sent as Web Push notifications to subscribed phones (works when the app is closed)
@@ -45,7 +45,7 @@ export class AlertService {
     const row = db
       .prepare('INSERT INTO security_alerts (kind, severity, message, meta, user_id) VALUES (?, ?, ?, ?, ?) RETURNING *')
       .get(kind, severity, message, JSON.stringify(meta), userId) as AlertRow;
-    bus.publish(LIVE_EVENTS.alert, { actor: null, ids: [row.id], message });
+    bus.publish(LIVE_EVENTS.alert, { actor: null, ids: [row.id], message, severity });
     void this.deliver(row);
     return row;
   }

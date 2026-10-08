@@ -5,7 +5,7 @@ type Listener = (e: LiveEvent) => void;
 
 /**
  * In-process event bus. Domain modules publish events after they change data;
- * the SSE endpoint fans them out to every connected device so both partners
+ * the SSE endpoint fans them out to every connected device so every team member
  * always see the same stock and orders. Other modules (alerts, push, future
  * integrations) can subscribe too.
  */
