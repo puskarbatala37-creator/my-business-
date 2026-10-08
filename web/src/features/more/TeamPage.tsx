@@ -10,7 +10,8 @@ import type { TeamMember } from '../../lib/types';
 type Role = 'owner' | 'member';
 
 /**
- * Team accounts. Adding someone = name + username + password, nothing else.
+ * Team accounts. Adding someone = name + email + a starting password. They add (and confirm)
+ * their own mobile number the first time they sign in.
  * Owners manage the team; members can do all day-to-day work (orders, stock, bills).
  */
 export function TeamPage() {
@@ -50,7 +51,12 @@ export function TeamPage() {
                     {u.displayName} {u.id === me?.user.id && <span className="tiny muted">(you)</span>}
                   </div>
                   <div className="tiny muted">
-                    @{u.username} · {u.last_seen_at ? `active ${dateTime(u.last_seen_at)}` : 'not signed in yet'}
+                    {u.email} · {u.last_seen_at ? `active ${dateTime(u.last_seen_at)}` : 'not signed in yet'}
+                    {u.active && (u.needs_email || !u.has_phone) && (
+                      <span className="badge warn" style={{ marginLeft: 6 }}>
+                        {u.needs_email ? 'No email yet' : 'No phone yet'}
+                      </span>
+                    )}
                     {u.passkeys > 0 && ' · uses fingerprint/face'}
                   </div>
                 </div>
@@ -74,7 +80,8 @@ function AddMember({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [displayName, setDisplayName] = useState('');
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState<Role>('member');
   const [busy, setBusy] = useState(false);
@@ -86,10 +93,10 @@ function AddMember({ onClose }: { onClose: () => void }) {
           e.preventDefault();
           setBusy(true);
           try {
-            await api.post('/api/auth/team', { displayName, username, password, role });
+            await api.post('/api/auth/team', { displayName, email, phone, password, role });
             qc.invalidateQueries({ queryKey: ['team'] });
             qc.invalidateQueries({ queryKey: ['me'] });
-            toast(`${displayName} can now sign in as “${username}”`);
+            toast(`${displayName} can now sign in with ${email.trim().toLowerCase()}`);
             onClose();
           } catch (err) {
             toast((err as Error).message, true);
@@ -103,19 +110,15 @@ function AddMember({ onClose }: { onClose: () => void }) {
           <input className="input" autoFocus value={displayName} onChange={(e) => setDisplayName(e.target.value)} required />
         </label>
         <label className="field">
-          Username (for signing in)
-          <input
-            className="input"
-            autoCapitalize="none"
-            autoComplete="off"
-            value={username}
-            onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/\s+/g, ''))}
-            required
-            minLength={2}
-          />
+          Email (they sign in with this)
+          <input className="input" type="email" inputMode="email" autoCapitalize="none" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} required />
         </label>
         <label className="field">
-          Password (at least 8 characters – they can change it later)
+          Mobile number (optional – otherwise they add it when they first sign in)
+          <input className="input" type="tel" inputMode="tel" autoComplete="off" placeholder="98XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </label>
+        <label className="field">
+          Starting password (at least 8 characters – they can change it later)
           <input className="input" type="text" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} required minLength={8} />
         </label>
         <Seg value={role} onChange={setRole} options={[{ value: 'member', label: 'Team member' }, { value: 'owner', label: 'Owner' }]} />
@@ -131,6 +134,7 @@ function EditMember({ u, self, onClose }: { u: TeamMember; self: boolean; onClos
   const qc = useQueryClient();
   const toast = useToast();
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState(u.needs_email ? '' : u.email);
   const save = async (patch: Record<string, unknown>, done: string) => {
     try {
       await api.patch(`/api/auth/team/${u.id}`, patch);
@@ -145,7 +149,7 @@ function EditMember({ u, self, onClose }: { u: TeamMember; self: boolean; onClos
   return (
     <Sheet title={u.displayName} onClose={onClose}>
       <div className="stack">
-        <div className="small muted">@{u.username}</div>
+        <div className="small muted">{u.email}</div>
         <Seg
           value={u.role}
           onChange={(r) => r !== u.role && save({ role: r }, `${u.displayName} is now ${r === 'owner' ? 'an owner' : 'a team member'}`)}
@@ -154,6 +158,23 @@ function EditMember({ u, self, onClose }: { u: TeamMember; self: boolean; onClos
             { value: 'owner', label: 'Owner' },
           ]}
         />
+        {!self && (
+          <form
+            className="stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              save({ email }, `${u.displayName} now signs in with ${email.trim().toLowerCase()}`);
+            }}
+          >
+            <label className="field">
+              Sign-in email for {u.displayName}
+              <input className="input" type="email" inputMode="email" autoCapitalize="none" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+            <button className="btn block" disabled={email.trim().toLowerCase() === u.email}>
+              Change email
+            </button>
+          </form>
+        )}
         {!self && (
           <form
             className="stack"

@@ -14,6 +14,7 @@ import { SESSION_COOKIE, type AuthService } from '../../../server/src/modules/au
 import { catalogModule } from '../../../server/src/modules/catalog/index';
 import { customersModule } from '../../../server/src/modules/customers/index';
 import { dashboardModule } from '../../../server/src/modules/dashboard/index';
+import { messagingModule } from '../../../server/src/modules/messaging/index';
 import { ordersModule } from '../../../server/src/modules/orders/index';
 import { payModule, paymentsModule } from '../../../server/src/modules/payments/index';
 import { receiptsModule } from '../../../server/src/modules/receipts/index';
@@ -23,6 +24,7 @@ import { demoUploadsModule, restoreFileUrls } from './uploads';
 import { seedDemo } from './seed';
 
 const modules: AppModule[] = [
+  messagingModule,
   securityModule,
   authModule,
   catalogModule,
@@ -58,6 +60,10 @@ const config: Config = {
   },
   transcribe: { url: '', apiKey: '', model: '' },
   alertWebhookUrl: '',
+  // No texts or emails leave the demo: one-time codes are shown on screen instead.
+  sms: { provider: 'log', sparrowToken: '', sparrowFrom: '', twilioSid: '', twilioToken: '', twilioFrom: '' },
+  mail: { smtpUrl: '', from: '' },
+  showCodesOnScreen: true,
   vapidSubject: 'mailto:demo@example.com',
   webauthn: { rpName: 'Slay', rpID: location.hostname, origins: [origin] },
 };
@@ -66,6 +72,12 @@ export async function startDemoServer(onChange: () => void) {
   const ctx: AppContext = { config, db: openDatabase(config.dbFile), bus: new EventBus(), services: {} };
   for (const m of modules) m.init?.(ctx);
   restoreFileUrls(ctx);
+  // Demo data saved before email sign-in: give the sample accounts their demo emails and phones.
+  for (const [name, phone] of [['teza', '9841000001'], ['partner', '9841000002']]) {
+    ctx.db
+      .prepare(`UPDATE users SET email = ?, username = ?, phone = COALESCE(phone, ?), phone_verified_at = COALESCE(phone_verified_at, ?) WHERE username = ? AND email IS NULL`)
+      .run(`${name}@slay.demo`, `${name}@slay.demo`, phone, new Date().toISOString(), name);
+  }
   const isNew = (ctx.db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n === 0;
   if (isNew) await seedDemo(ctx);
 

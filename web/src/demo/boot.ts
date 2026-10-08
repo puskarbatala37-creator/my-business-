@@ -2,6 +2,7 @@
  * Demo preview boot: loads SQLite (WebAssembly), restores the saved demo database
  * from this browser, then starts the in-browser server before the app renders.
  */
+import { Buffer } from 'buffer';
 import initSqlJs from 'sql.js/dist/sql-wasm-browser.js';
 import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url';
 
@@ -48,6 +49,8 @@ export async function resetDemo() {
 export async function bootDemo() {
   const SQL = await initSqlJs({ locateFile: () => wasmUrl });
   const g = globalThis as any;
+  // Server code uses Node's global Buffer (recovery codes, eSewa); browsers don't have one.
+  g.Buffer ??= Buffer;
   g.__SLAY_SQL = SQL;
   g.__SLAY_DB_BYTES = await load();
   const { startDemoServer } = await import('./server');

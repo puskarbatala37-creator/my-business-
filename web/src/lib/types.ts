@@ -2,12 +2,23 @@ import type { FulfillmentStatus, OrderState, PaymentMethod, PaymentStatus, Platf
 
 export interface User {
   id: number;
-  username: string;
+  /** Sign-in email (older accounts may still show their old username until they add one). */
+  email: string;
   displayName: string;
   role: 'owner' | 'member';
 }
 
+/** The signed-in person's own account, including what they still need to add. */
+export interface Profile extends Omit<User, 'email'> {
+  email: string | null;
+  phone: string | null;
+  phoneVerified: boolean;
+  missing: ('email' | 'phone' | 'verify_phone')[];
+}
+
 export interface TeamMember extends User {
+  needs_email: boolean;
+  has_phone: boolean;
   active: boolean;
   created_at: string;
   last_seen_at: string | null;

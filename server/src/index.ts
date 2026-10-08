@@ -12,6 +12,6 @@ app.listen(config.port, () => {
   console.log(`Slay is running on http://localhost:${config.port} (eSewa: ${config.esewa.mode} mode)`);
   if (setupCode) {
     console.log(`No accounts yet. Open the app and create the first owner account with setup code: ${setupCode}`);
-    console.log('(or from the command line: npm run user:create -- <username> "<Display Name>" owner)');
+    console.log('(or from the command line: npm run user:create -- <email> "<Name>" owner <phone>)');
   }
 });

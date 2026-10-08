@@ -4,6 +4,7 @@ import { catalogModule } from './catalog/index.js';
 import { customersModule } from './customers/index.js';
 import { dashboardModule } from './dashboard/index.js';
 import { liveModule } from './live/index.js';
+import { messagingModule } from './messaging/index.js';
 import { ordersModule } from './orders/index.js';
 import { payModule, paymentsModule } from './payments/index.js';
 import { receiptsModule } from './receipts/index.js';
@@ -17,6 +18,7 @@ import { voiceModule } from './voice/index.js';
  * are added as a new module here.
  */
 export const modules: AppModule[] = [
+  messagingModule,
   securityModule,
   authModule,
   catalogModule,

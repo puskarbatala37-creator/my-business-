@@ -1,11 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { api, ApiError } from './api';
-import type { User } from './types';
+import type { Profile, User } from './types';
 
 interface Me {
-  user: User;
+  user: Profile;
   team: User[];
+  /** Whether text messages (recovery codes) can be sent. */
+  smsReady: boolean;
 }
 
 const AuthCtx = createContext<{ me: Me | null; loading: boolean; refresh: () => void }>({ me: null, loading: true, refresh: () => {} });

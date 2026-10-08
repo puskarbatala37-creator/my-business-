@@ -5,6 +5,7 @@ import type { AppContext, AppModule } from '../../core/context.js';
 import { service } from '../../core/context.js';
 import { clientIp, HttpError, idParam, parse } from '../../core/http.js';
 import { PasskeyService } from './passkeys.js';
+import { RecoveryService } from './recovery.js';
 import { AuthService, DEVICE_COOKIE, ROLES, SESSION_COOKIE, type ClientInfo } from './service.js';
 
 /** Attaches req.user when a valid session cookie is present. */
@@ -27,7 +28,9 @@ export const requireOwner: RequestHandler = (req, _res, next) => {
 };
 
 const zPassword = z.string().min(8, 'password needs at least 8 characters').max(200);
-const zUsername = z.string().trim().min(2).max(40);
+const zEmail = z.string().trim().min(3, 'enter your email address').max(254);
+const zPhone = z.string().trim().min(1, 'enter a mobile number').max(25);
+const zCode = z.string().trim().regex(/^\d{6}$/, 'enter the 6-digit code');
 
 export const authModule: AppModule = {
   name: 'auth',
@@ -36,12 +39,14 @@ export const authModule: AppModule = {
     const auth = new AuthService(ctx);
     ctx.services.auth = auth;
     ctx.services.passkeys = new PasskeyService(ctx);
+    ctx.services.recovery = new RecoveryService(ctx);
     auth.seedInitialUsers();
   },
   routes(ctx) {
     const r = Router();
     const auth = () => service<AuthService>(ctx, 'auth');
     const passkeys = () => service<PasskeyService>(ctx, 'passkeys');
+    const recovery = () => service<RecoveryService>(ctx, 'recovery');
     const cookieBase = { httpOnly: true, sameSite: 'lax' as const, secure: ctx.config.cookieSecure, path: '/' };
 
     const client = (req: Request, res: Response): ClientInfo => {
@@ -58,18 +63,34 @@ export const authModule: AppModule = {
     // ── First-run setup: create the first owner from the app (no command line needed) ──
     r.get('/setup', (_req, res) => res.json({ needsSetup: auth().userCount() === 0 }));
     r.post('/setup', (req, res) => {
-      const b = parse(z.object({ code: z.string(), username: zUsername, displayName: z.string().trim().min(1).max(80), password: zPassword }), req.body);
+      const b = parse(
+        z.object({ code: z.string(), email: zEmail, displayName: z.string().trim().min(1).max(80), phone: zPhone, password: zPassword }),
+        req.body,
+      );
       if (auth().userCount() > 0) throw new HttpError(409, 'Setup is already done – please sign in.');
       const code = auth().setupCode;
       if (!code || b.code.trim() !== code) throw new HttpError(403, 'Wrong setup code. It is printed in the server log.');
-      const { id } = auth().createUser(b.username, b.displayName, b.password, 'owner');
+      const { id } = auth().createUser({ email: b.email, displayName: b.displayName, password: b.password, phone: b.phone, role: 'owner' });
       signIn(res, auth().startSession(auth().getUser(id), client(req, res), 'password'));
     });
 
-    // ── Password login (fallback) ──
+    // ── Password login (fallback). Sign in with your email; older accounts may still use their old username. ──
     r.post('/login', async (req, res) => {
-      const body = parse(z.object({ username: z.string().min(1).max(100), password: z.string().min(1).max(200) }), req.body);
-      signIn(res, await auth().login({ ...body, ...client(req, res) }));
+      const body = parse(
+        z.object({ email: z.string().max(254).optional(), username: z.string().max(254).optional(), password: z.string().min(1).max(200) }).refine((b) => (b.email ?? b.username)?.trim(), 'enter your email address'),
+        req.body,
+      );
+      signIn(res, await auth().login({ email: (body.email ?? body.username)!, password: body.password, ...client(req, res) }));
+    });
+
+    // ── "Forgot password?": a 6-digit code by SMS to the account's phone ──
+    r.post('/recover', async (req, res) => {
+      const b = parse(z.object({ email: zEmail }), req.body);
+      res.json(await recovery().start(b.email, client(req, res)));
+    });
+    r.post('/recover/reset', async (req, res) => {
+      const b = parse(z.object({ email: zEmail, code: zCode, password: zPassword }), req.body);
+      signIn(res, await recovery().finish(b, client(req, res)));
     });
 
     // ── Biometric login (passkeys) ──
@@ -91,9 +112,19 @@ export const authModule: AppModule = {
     });
 
     r.get('/me', requireAuth, (req, res) => {
-      const u = req.user!;
-      const team = ctx.db.prepare('SELECT id, username, display_name AS displayName, role FROM users WHERE active = 1 ORDER BY id').all();
-      res.json({ user: { id: u.id, username: u.username, displayName: u.displayName, role: u.role }, team });
+      const team = ctx.db.prepare('SELECT id, COALESCE(email, username) AS email, display_name AS displayName, role FROM users WHERE active = 1 ORDER BY id').all();
+      res.json({ user: auth().profile(req.user!.id), team, smsReady: auth().smsReady });
+    });
+
+    // ── Your own account details (email, phone) ──
+    r.patch('/profile', requireAuth, (req, res) => {
+      const b = parse(z.object({ displayName: z.string().trim().min(1).max(80).optional(), email: zEmail.optional(), phone: zPhone.optional() }), req.body);
+      res.json({ user: auth().updateProfile(req.user!, b) });
+    });
+    r.post('/profile/phone/send-code', requireAuth, async (req, res) => res.json(await recovery().sendPhoneCode(req.user!)));
+    r.post('/profile/phone/verify', requireAuth, (req, res) => {
+      const b = parse(z.object({ code: zCode }), req.body);
+      res.json({ user: recovery().verifyPhone(req.user!, b.code) });
     });
 
     r.post('/logout', requireAuth, (req, res) => {
@@ -111,12 +142,15 @@ export const authModule: AppModule = {
     // ── Team: everyone can see it; owners add members, reset passwords, switch accounts off ──
     r.get('/team', requireAuth, (_req, res) => res.json({ team: auth().team() }));
     r.post('/team', requireAuth, requireOwner, (req, res) => {
-      const b = parse(z.object({ username: zUsername, displayName: z.string().trim().min(1).max(80), password: zPassword, role: z.enum(ROLES).default('member') }), req.body);
-      res.status(201).json({ id: auth().addMember(req.user!, b) });
+      const b = parse(
+        z.object({ email: zEmail, displayName: z.string().trim().min(1).max(80), password: zPassword, phone: zPhone.optional().or(z.literal('')), role: z.enum(ROLES).default('member') }),
+        req.body,
+      );
+      res.status(201).json({ id: auth().addMember(req.user!, { ...b, phone: b.phone || null }) });
     });
     r.patch('/team/:id', requireAuth, requireOwner, (req, res) => {
       const b = parse(
-        z.object({ displayName: z.string().trim().min(1).max(80).optional(), role: z.enum(ROLES).optional(), active: z.boolean().optional(), password: zPassword.optional() }),
+        z.object({ displayName: z.string().trim().min(1).max(80).optional(), email: zEmail.optional(), role: z.enum(ROLES).optional(), active: z.boolean().optional(), password: zPassword.optional() }),
         req.body,
       );
       auth().updateMember(req.user!, idParam(req), b);

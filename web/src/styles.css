@@ -289,3 +289,6 @@ textarea.input { min-height: 80px; resize: vertical; }
 /* Inside the hosted preview the page itself is already padded for the phone's notch. */
 .demo-banner { padding-top: 6px; }
 .demo-banner ~ .app .topbar { top: env(safe-area-inset-top, 0px); padding-top: 10px; }
+
+/* One-time code */
+.code-input { font-size: 24px; letter-spacing: 0.4em; text-align: center; }

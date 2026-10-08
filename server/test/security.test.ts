@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { login, setup, w } from './helpers.js';
 
 const attempt = (app: any, password: string, agent = request.agent(app)) =>
-  agent.post('/api/auth/login').set('x-slay', '1').send({ username: 'teza', password });
+  agent.post('/api/auth/login').set('x-slay', '1').send({ email: 'teza@example.com', password });
 
 describe('security alerts', () => {
   it('alerts both users on repeated failures and locks the account', async () => {
@@ -73,7 +73,7 @@ describe('security alerts', () => {
     const teza = w(await login(app, 'teza', 'password-teza'));
     const partner = w(await login(app, 'partner', 'password-partner'));
     await partner.post('/api/security/alerts/read');
-    await teza.post('/api/auth/team', { username: 'sita', displayName: 'Sita', password: 'sita-pass-1' });
+    await teza.post('/api/auth/team', { email: 'sita@example.com', displayName: 'Sita', password: 'sita-pass-1' });
     await teza.post('/api/auth/password', { current: 'password-teza', next: 'new-teza-pass' });
     const res = (await partner.get('/api/security/alerts')).body;
     expect(res.alerts.find((a: any) => a.kind === 'team_member_added').severity).toBe('info');
@@ -109,7 +109,7 @@ describe('what actually gets sent to phones / the webhook', () => {
 
       await attempt(s.app, 'password-teza', phone); // trusted
       await attempt(s.app, 'password-teza', phone); // trusted
-      await w(phone).post('/api/auth/team', { username: 'sita', displayName: 'Sita', password: 'sita-pass-1' }); // routine
+      await w(phone).post('/api/auth/team', { email: 'sita@example.com', displayName: 'Sita', password: 'sita-pass-1' }); // routine
       await new Promise((r) => setTimeout(r, 20));
       expect(sent).toHaveLength(1);
     } finally {

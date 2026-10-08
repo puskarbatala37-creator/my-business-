@@ -1,22 +1,32 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { CodeInput, DemoCode } from '../../components/CodeInput';
 import { Icon } from '../../components/Icon';
 import { Spinner } from '../../components/ui';
 import { api } from '../../lib/api';
 import { biometricAvailable, biometricEnrolledHere, biometricLogin, biometricName } from '../../lib/biometric';
 
 export const JUST_USED_PASSWORD = 'slay.passwordLogin';
+const IS_DEMO = import.meta.env.VITE_DEMO === '1';
+
+const markPasswordLogin = () => {
+  try {
+    sessionStorage.setItem(JUST_USED_PASSWORD, '1');
+  } catch {}
+};
 
 /**
  * Sign-in. On a phone with a fingerprint / face sensor that has been set up,
- * biometric sign-in is the main button; username + password is the fallback.
+ * biometric sign-in is the main button; email + password is the fallback,
+ * and "Forgot password?" sends a recovery code to the account's phone.
  */
 export function LoginPage() {
   const qc = useQueryClient();
   const setup = useQuery({ queryKey: ['setup'], queryFn: () => api.get<{ needsSetup: boolean }>('/api/auth/setup') });
   const [bio, setBio] = useState<boolean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
-  const [username, setUsername] = useState('');
+  const [recovering, setRecovering] = useState(false);
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -42,6 +52,7 @@ export function LoginPage() {
 
   if (setup.isLoading || bio === null) return <Spinner />;
   if (setup.data?.needsSetup) return <SetupPage onDone={signedIn} />;
+  if (recovering) return <RecoverPage initialEmail={email} onDone={signedIn} onCancel={() => setRecovering(false)} />;
 
   const passwordForm = !bio || showPassword;
 
@@ -63,16 +74,16 @@ export function LoginPage() {
             {error}
           </div>
         )}
-        {import.meta.env.VITE_DEMO === '1' && (
+        {IS_DEMO && (
           <div className="alert-banner info small">
             <div>
-              Demo logins: <strong>teza</strong> / <strong>demo-teza-123</strong> or <strong>partner</strong> / <strong>demo-partner-123</strong>
+              Demo logins: <strong>teza@slay.demo</strong> / <strong>demo-teza-123</strong> or <strong>partner@slay.demo</strong> / <strong>demo-partner-123</strong>
               <button
                 type="button"
                 className="btn sm block"
                 style={{ marginTop: 8 }}
                 onClick={() => {
-                  setUsername('teza');
+                  setEmail('teza@slay.demo');
                   setPassword('demo-teza-123');
                 }}
               >
@@ -90,10 +101,8 @@ export function LoginPage() {
               setBusy(true);
               setError('');
               try {
-                await api.post('/api/auth/login', { username, password });
-                try {
-                  sessionStorage.setItem(JUST_USED_PASSWORD, '1');
-                } catch {}
+                await api.post('/api/auth/login', { email, password });
+                markPasswordLogin();
                 await signedIn();
               } catch (err) {
                 setError((err as Error).message);
@@ -103,8 +112,18 @@ export function LoginPage() {
             }}
           >
             <label className="field">
-              Username
-              <input className="input" autoComplete="username" autoCapitalize="none" value={username} onChange={(e) => setUsername(e.target.value)} required />
+              Email
+              <input
+                className="input"
+                type="email"
+                inputMode="email"
+                autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+              />
             </label>
             <label className="field">
               Password
@@ -113,10 +132,13 @@ export function LoginPage() {
             <button className={`btn block ${bio ? '' : 'primary'}`} disabled={busy}>
               {busy ? 'Signing in…' : 'Sign in with password'}
             </button>
+            <button type="button" className="btn ghost block" onClick={() => setRecovering(true)}>
+              Forgot password?
+            </button>
           </form>
         ) : (
           <button className="btn ghost block" onClick={() => setShowPassword(true)}>
-            Use username &amp; password instead
+            Use email &amp; password instead
           </button>
         )}
       </div>
@@ -124,9 +146,103 @@ export function LoginPage() {
   );
 }
 
+/** "Forgot password?": a 6-digit code goes by SMS to the phone number on the account. */
+function RecoverPage({ initialEmail, onDone, onCancel }: { initialEmail: string; onDone: () => void; onCancel: () => void }) {
+  const [step, setStep] = useState<'email' | 'code'>('email');
+  const [email, setEmail] = useState(initialEmail);
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
+  const [message, setMessage] = useState('');
+  const [demoCode, setDemoCode] = useState<string>();
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  async function send() {
+    setBusy(true);
+    setError('');
+    try {
+      const r = await api.post<{ message: string; demo_code?: string }>('/api/auth/recover', { email });
+      setMessage(r.message);
+      setDemoCode(r.demo_code);
+      setStep('code');
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="login-wrap">
+      <div className="card stack" style={{ width: '100%', maxWidth: 380, padding: 24 }}>
+        <h1>Reset your password</h1>
+        {step === 'email' ? (
+          <form
+            className="stack"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void send();
+            }}
+          >
+            <div className="small muted">We'll text a 6-digit code to the mobile number on your account.</div>
+            <label className="field">
+              Your sign-in email
+              <input className="input" type="email" inputMode="email" autoComplete="username" autoCapitalize="none" value={email} onChange={(e) => setEmail(e.target.value)} required />
+            </label>
+            {error && <div className="alert-banner">{error}</div>}
+            <button className="btn primary block" disabled={busy}>
+              {busy ? 'Sending…' : 'Text me a code'}
+            </button>
+          </form>
+        ) : (
+          <form
+            className="stack"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setBusy(true);
+              setError('');
+              try {
+                await api.post('/api/auth/recover/reset', { email, code, password });
+                markPasswordLogin();
+                onDone();
+              } catch (err) {
+                setError((err as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <div className="small">{message}</div>
+            <DemoCode code={demoCode} />
+            <label className="field" htmlFor="recover-code">
+              6-digit code
+              <CodeInput id="recover-code" value={code} onChange={setCode} />
+            </label>
+            <label className="field">
+              New password (at least 8 characters)
+              <input className="input" type="password" autoComplete="new-password" minLength={8} value={password} onChange={(e) => setPassword(e.target.value)} required />
+            </label>
+            {error && <div className="alert-banner">{error}</div>}
+            <button className="btn primary block" disabled={busy || code.length !== 6}>
+              {busy ? 'Checking…' : 'Set new password & sign in'}
+            </button>
+            <button type="button" className="btn ghost block" onClick={() => void send()} disabled={busy}>
+              Send a new code
+            </button>
+          </form>
+        )}
+        <button type="button" className="btn ghost block" onClick={onCancel}>
+          Back to sign in
+        </button>
+        <div className="tiny muted center">No phone on your account, or lost it? Ask an owner to reset your password under More → Team.</div>
+      </div>
+    </div>
+  );
+}
+
 /** First start: create the first owner account in the app (setup code is in the server log). */
 function SetupPage({ onDone }: { onDone: () => void }) {
-  const [f, setF] = useState({ code: '', displayName: '', username: '', password: '' });
+  const [f, setF] = useState({ code: '', displayName: '', email: '', phone: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const field = (k: keyof typeof f, label: string, props: Record<string, unknown> = {}) => (
@@ -158,9 +274,10 @@ function SetupPage({ onDone }: { onDone: () => void }) {
           <div className="brand">Slay</div>
           <div className="small muted">Welcome! Create the first owner account. You can add the rest of the team from the app afterwards.</div>
         </div>
-        {field('code', 'Setup code (shown in the server log)', { inputMode: 'numeric', autoComplete: 'one-time-code' })}
-        {field('displayName', 'Your name')}
-        {field('username', 'Username', { autoCapitalize: 'none', autoComplete: 'username' })}
+        {field('code', 'Setup code (shown in the server log)', { inputMode: 'numeric', autoComplete: 'off' })}
+        {field('displayName', 'Your name', { autoComplete: 'name' })}
+        {field('email', 'Email – you sign in with this', { type: 'email', inputMode: 'email', autoCapitalize: 'none', autoComplete: 'email' })}
+        {field('phone', 'Mobile number – for account recovery codes', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX' })}
         {field('password', 'Password (at least 8 characters)', { type: 'password', minLength: 8, autoComplete: 'new-password' })}
         {error && <div className="alert-banner">{error}</div>}
         <button className="btn primary block" disabled={busy}>

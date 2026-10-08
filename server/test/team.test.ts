@@ -9,10 +9,10 @@ import type { AuthService } from '../src/modules/auth/service.js';
 import { login, seedCatalog, setup, w } from './helpers.js';
 
 describe('team accounts', () => {
-  it('an owner adds a new team member with just a username and password', async () => {
+  it('an owner adds a new team member with just an email and password', async () => {
     const { app } = setup();
     const teza = w(await login(app, 'teza', 'password-teza'));
-    const add = await teza.post('/api/auth/team', { username: 'sita', displayName: 'Sita', password: 'sita-pass-1' });
+    const add = await teza.post('/api/auth/team', { email: 'sita@example.com', displayName: 'Sita', password: 'sita-pass-1' });
     expect(add.status).toBe(201);
 
     const sita = w(await login(app, 'sita', 'sita-pass-1'));
@@ -25,31 +25,31 @@ describe('team accounts', () => {
     const order = await sita.post('/api/orders', { platform: 'instagram', customer: { name: 'Gita' }, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3500 }] });
     expect(order.status).toBe(201);
     // …but cannot manage the team.
-    expect((await sita.post('/api/auth/team', { username: 'x1', displayName: 'X', password: 'xxxxxxxx' })).status).toBe(403);
+    expect((await sita.post('/api/auth/team', { email: 'x1@example.com', displayName: 'X', password: 'xxxxxxxx' })).status).toBe(403);
 
     // Everyone is told a member was added.
     const alerts = (await sita.get('/api/security/alerts')).body.alerts;
     expect(alerts.some((a: any) => a.kind === 'team_member_added')).toBe(true);
   });
 
-  it('rejects taken usernames and short passwords', async () => {
+  it('rejects taken emails, invalid emails and short passwords', async () => {
     const { app } = setup();
     const teza = w(await login(app, 'teza', 'password-teza'));
-    expect((await teza.post('/api/auth/team', { username: 'Partner', displayName: 'P2', password: 'longenough' })).status).toBe(409);
-    expect((await teza.post('/api/auth/team', { username: 'new', displayName: 'New', password: 'short' })).status).toBe(400);
-    expect((await teza.post('/api/auth/team', { username: 'has space', displayName: 'New', password: 'longenough' })).status).toBe(400);
+    expect((await teza.post('/api/auth/team', { email: 'Partner@Example.com', displayName: 'P2', password: 'longenough' })).status).toBe(409);
+    expect((await teza.post('/api/auth/team', { email: 'new@example.com', displayName: 'New', password: 'short' })).status).toBe(400);
+    expect((await teza.post('/api/auth/team', { email: 'not-an-email', displayName: 'New', password: 'longenough' })).status).toBe(400);
   });
 
   it('switching a member off signs them out immediately; password resets work', async () => {
     const { app } = setup();
     const teza = w(await login(app, 'teza', 'password-teza'));
-    const { id } = (await teza.post('/api/auth/team', { username: 'ram', displayName: 'Ram', password: 'ram-pass-11' })).body;
+    const { id } = (await teza.post('/api/auth/team', { email: 'ram@example.com', displayName: 'Ram', password: 'ram-pass-11' })).body;
     const ram = w(await login(app, 'ram', 'ram-pass-11'));
     expect((await ram.get('/api/orders')).status).toBe(200);
 
     await teza.patch(`/api/auth/team/${id}`, { active: false });
     expect((await ram.get('/api/orders')).status).toBe(401);
-    const again = await request(app).post('/api/auth/login').set('x-slay', '1').send({ username: 'ram', password: 'ram-pass-11' });
+    const again = await request(app).post('/api/auth/login').set('x-slay', '1').send({ email: 'ram@example.com', password: 'ram-pass-11' });
     expect(again.status).toBe(403);
 
     await teza.patch(`/api/auth/team/${id}`, { active: true, password: 'new-ram-pass' });
@@ -60,8 +60,8 @@ describe('team accounts', () => {
     const { app } = setup();
     const teza = w(await login(app, 'teza', 'password-teza'));
     const team = (await teza.get('/api/auth/team')).body.team;
-    const tezaId = team.find((u: any) => u.username === 'teza').id;
-    const partnerId = team.find((u: any) => u.username === 'partner').id;
+    const tezaId = team.find((u: any) => u.email === 'teza@example.com').id;
+    const partnerId = team.find((u: any) => u.email === 'partner@example.com').id;
     expect((await teza.patch(`/api/auth/team/${tezaId}`, { active: false })).status).toBe(400);
     expect((await teza.patch(`/api/auth/team/${partnerId}`, { role: 'member' })).status).toBe(200);
     expect((await teza.patch(`/api/auth/team/${tezaId}`, { role: 'member' })).status).toBe(400);
@@ -74,14 +74,14 @@ describe('first-run setup', () => {
     const { app, ctx } = createApp(config);
     expect((await request(app).get('/api/auth/setup')).body.needsSetup).toBe(true);
     const code = service<AuthService>(ctx, 'auth').setupCode!;
-    const body = { code: 'wrong', username: 'teza', displayName: 'Teza', password: 'teza-pass-1' };
+    const body = { code: 'wrong', email: 'teza@example.com', displayName: 'Teza', phone: '9841234567', password: 'teza-pass-1' };
     expect((await request(app).post('/api/auth/setup').set('x-slay', '1').send(body)).status).toBe(403);
     const agent = request.agent(app);
     const ok = await agent.post('/api/auth/setup').set('x-slay', '1').send({ ...body, code });
     expect(ok.status).toBe(200);
     expect((await agent.get('/api/auth/me')).body.user.role).toBe('owner');
     // Can't be used again.
-    expect((await request(app).post('/api/auth/setup').set('x-slay', '1').send({ ...body, code, username: 'evil' })).status).toBe(409);
+    expect((await request(app).post('/api/auth/setup').set('x-slay', '1').send({ ...body, code, email: 'evil@example.com' })).status).toBe(409);
   });
 });
 

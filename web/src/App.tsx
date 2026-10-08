@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Spinner } from './components/ui';
+import { CompleteAccountPage } from './features/auth/CompleteAccountPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { CustomerPage, CustomersPage } from './features/customers/CustomersPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
@@ -34,6 +35,7 @@ export function App() {
   }
   if (loading) return <Spinner />;
   if (!me) return <LoginPage />;
+  if (me.user.missing.length) return <CompleteAccountPage profile={me.user} />;
 
   return (
     <Routes>

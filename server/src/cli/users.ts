@@ -1,8 +1,8 @@
 /**
- * Manage logins from the command line:
- *   npm run user:create -- teza "Teza"            (first account is an owner)
- *   npm run user:create -- sita "Sita" member     (owner | member)
- *   npm run user:password -- teza
+ * Manage logins from the command line (normally done in the app under More → Team):
+ *   npm run user:create -- teza@gmail.com "Teza"                     (first account is an owner)
+ *   npm run user:create -- sita@gmail.com "Sita" member 98XXXXXXXX   (owner | member, optional phone)
+ *   npm run user:password -- teza@gmail.com
  */
 import readline from 'node:readline';
 import { loadConfig } from '../config.js';
@@ -16,25 +16,25 @@ async function ask(question: string): Promise<string> {
 }
 
 async function main() {
-  const [cmd, username, displayName, roleArg] = process.argv.slice(2);
+  const [cmd, email, displayName, roleArg, phone] = process.argv.slice(2);
   const config = loadConfig();
   const db = openDatabase(config.dbFile);
   const auth = new AuthService({ config, db, bus: new EventBus(), services: {} });
-  if (!cmd || !username || !['create', 'password'].includes(cmd)) {
-    console.log('Usage: users.ts create <username> "<Display Name>" [owner|member] | users.ts password <username>');
+  if (!cmd || !email || !['create', 'password'].includes(cmd)) {
+    console.log('Usage: users.ts create <email> "<Name>" [owner|member] [phone] | users.ts password <email>');
     process.exit(1);
   }
-  const password = process.env.SLAY_PASSWORD || (await ask(`Password for ${username} (min 8 chars): `));
+  const password = process.env.SLAY_PASSWORD || (await ask(`Password for ${email} (min 8 chars): `));
   if (cmd === 'create') {
     const role = roleArg === 'member' || roleArg === 'owner' ? roleArg : auth.userCount() === 0 ? 'owner' : 'member';
-    auth.createUser(username, displayName || username, password, role);
-    console.log(`Created login "${username}" (${role}).`);
+    auth.createUser({ email, displayName: displayName || email.split('@')[0], password, role, phone: phone || null });
+    console.log(`Created login ${email} (${role}).`);
   } else {
-    const u = db.prepare('SELECT id FROM users WHERE username = ?').get(username) as { id: number } | undefined;
-    if (!u) throw new Error(`No user called ${username}`);
+    const u = auth.findByLogin(email);
+    if (!u) throw new Error(`No account with ${email}`);
     auth.setPassword(u.id, password);
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
-    console.log(`Password updated for "${username}" and their devices were signed out.`);
+    console.log(`Password updated for ${email} and their devices were signed out.`);
   }
 }
 

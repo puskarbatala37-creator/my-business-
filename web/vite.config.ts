@@ -22,6 +22,7 @@ export default defineConfig(({ mode }) => {
             express: shim('express.ts'),
             multer: shim('multer.ts'),
             'web-push': shim('webpush.ts'),
+            nodemailer: shim('nodemailer.ts'),
             'better-sqlite3': shim('better-sqlite3.ts'),
             'node:crypto': shim('crypto.ts'),
             'node:fs': shim('fs.ts'),

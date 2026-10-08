@@ -38,6 +38,20 @@ export interface Config {
     model: string;
   };
   alertWebhookUrl: string;
+  /** Text messages (account recovery codes). */
+  sms: {
+    /** sparrow | twilio | log (log = print the message in the server log; for testing). */
+    provider: 'sparrow' | 'twilio' | 'log';
+    sparrowToken: string;
+    sparrowFrom: string;
+    twilioSid: string;
+    twilioToken: string;
+    twilioFrom: string;
+  };
+  /** Email (security notifications). Off unless SMTP_URL is set. */
+  mail: { smtpUrl: string; from: string };
+  /** Demo preview only: return one-time codes to the screen instead of sending them. */
+  showCodesOnScreen: boolean;
   webauthn: {
     rpName: string;
     /** Domain the passkeys belong to (hostname of APP_URL). */
@@ -95,6 +109,16 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
       model: env('TRANSCRIBE_MODEL', 'whisper-1'),
     },
     alertWebhookUrl: env('ALERT_WEBHOOK_URL'),
+    sms: {
+      provider: (['sparrow', 'twilio'].includes(env('SMS_PROVIDER')) ? env('SMS_PROVIDER') : 'log') as Config['sms']['provider'],
+      sparrowToken: env('SPARROW_SMS_TOKEN'),
+      sparrowFrom: env('SPARROW_SMS_FROM'),
+      twilioSid: env('TWILIO_ACCOUNT_SID'),
+      twilioToken: env('TWILIO_AUTH_TOKEN'),
+      twilioFrom: env('TWILIO_FROM'),
+    },
+    mail: { smtpUrl: env('SMTP_URL'), from: env('MAIL_FROM', 'Slay <no-reply@localhost>') },
+    showCodesOnScreen: false,
     vapidSubject: env('VAPID_SUBJECT', 'mailto:admin@example.com'),
     webauthn: { rpName: 'Slay', rpID: '', origins: [] },
     ...overrides,

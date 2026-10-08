@@ -8,8 +8,9 @@ It runs as an installable mobile web app (PWA), so one codebase works on **Andro
 
 | Area | Highlights |
 |---|---|
-| **Logins** | **Fingerprint or face recognition is the main way to sign in** (Face ID / Touch ID on iPhone, fingerprint or face unlock on Android) on any phone that supports it. **Username + password is always the fallback.** After the first password sign-in on a phone, the app offers to turn on biometrics. Biometric data never leaves the phone: it uses standard passkeys (WebAuthn), and the server only receives a cryptographic confirmation. |
-| **Team** | As many accounts as you need. To add someone, an owner opens **More → Team → Add team member** and enters a name, username and password. That's all. **Owners** can add people, reset passwords, and switch accounts off or back on. **Members** can do all the daily work (orders, stock, bills). Switching someone off signs them out everywhere immediately, and their past orders are kept. |
+| **Logins** | Everyone **signs in with their email address**, which is also where security notifications go. **Fingerprint or face recognition is the main way to sign in** (Face ID / Touch ID on iPhone, fingerprint or face unlock on Android) on any phone that supports it, and **email + password is always the fallback**. After the first password sign-in on a phone, the app offers to turn on biometrics. Biometric data never leaves the phone: it uses standard passkeys (WebAuthn), and the server only receives a cryptographic confirmation. |
+| **Account recovery** | Every account has a **mobile number**, added during setup and confirmed with a texted code. **Forgot password?** on the sign-in screen texts a 6-digit code to that number. The code resets the password, unlocks a locked account and signs out every other device, and the whole team is notified. Codes expire after 10 minutes and allow 5 tries. Sending is rate-limited (one code a minute, five an hour). The form never reveals whether an email has an account. Changing your sign-in email or recovery phone also notifies the team. |
+| **Team** | As many accounts as you need. To add someone, an owner opens **More → Team → Add team member** and enters a name, the person's **email** and a starting password (a phone number is optional). That's all. On their first sign-in, the new member adds and confirms their own mobile number. **Owners** can add people, correct a member's email, reset passwords, and switch accounts off or back on. **Members** can do all the daily work (orders, stock, bills). Switching someone off signs them out everywhere immediately, and their past orders are kept. |
 | **Real-time sync** | Every change is pushed to every team member's phone instantly (Server-Sent Events). If someone sells the last unit, it shows as out of stock on everyone else's phone right away. The server also checks stock inside a database transaction, so the same item can never be sold twice, even if two people tap "Save" at the same moment. |
 | **Catalog** | Category (e.g. *Sari*) → product/design (e.g. *Banarasi Silk*) → **colour variants**, each with its own stock count, photo, cost and selling price. Stock goes down automatically when an order is saved, and goes back up when an order is edited or cancelled. Every stock change is logged. |
 | **Orders (invoices)** | Automatic invoice numbers (`SLAY-2026-0001`), order date, **where the order came from (TikTok, Facebook, Instagram or WhatsApp). This is required, and shown as a badge on every order, the order screen and the invoice**, customer contact details with full order history, items (product + colour, qty, size, price, photo), notes, delivery tracking number, delivery due date, prep time, delivery charge and discount. **Payment:** paid in full / partially paid (shows paid *and* still owed) / unpaid (COD), with amount and method. **Fulfilment:** pending / sent. Includes a printable and shareable invoice. |
@@ -29,7 +30,7 @@ Returns and exchanges are not built yet, but the data model is ready for them (s
 | **On your computer** | `npm install`, then `npm run dev`, then open **http://localhost:5173**. On first start, the app asks you to create the owner account; the setup code is printed in the terminal. |
 | **On your phone, same Wi-Fi** | While `npm run dev` is running, open `http://<your-computer's-IP>:5173` on the phone. Vite prints this "Network" address when it starts. |
 | **For real use, anywhere** | Deploy it (see *Deploying* below) and open your own `https://…` address. Then use **Add to Home Screen** on each phone. |
-| **Quick look, no setup** | `npm run build:demo -w web` builds a self-contained **demo preview** in `web/dist-demo`. The whole app, server included, runs inside the browser on sample data, so it can be hosted as static files (`npm run preview:demo -w web` serves it locally). Fingerprint sign-in, notifications and eSewa need the real server, so they don't work in the demo. |
+| **Quick look, no setup** | `npm run build:demo -w web` builds a self-contained **demo preview** in `web/dist-demo`. The whole app, server included, runs inside the browser on sample data, so it can be hosted as static files (`npm run preview:demo -w web` serves it locally). Fingerprint sign-in, notifications and eSewa need the real server, so they don't work in the demo. No texts or emails are sent: one-time codes are shown on screen instead. |
 
 ## Running it
 
@@ -40,8 +41,10 @@ npm install
 npm run dev                                  # API on :3000, app on http://localhost:5173
 ```
 
-**First start:** open the app. It asks you to create the first **owner** account, using a 6-digit setup code that the server prints in its log. The code stops anyone else who finds the new site first from claiming it. After that, add everyone else in the app under **More → Team**. No command line is needed.
-(You can also use the command line: `npm run user:create -- teza "Teza" owner`.)
+**First start:** open the app. It asks you to create the first **owner** account (name, email, mobile number, password), using a 6-digit setup code that the server prints in its log. The code stops anyone else who finds the new site first from claiming it. After that, add everyone else in the app under **More → Team**. No command line is needed.
+(You can also use the command line: `npm run user:create -- teza@gmail.com "Teza" owner 98XXXXXXXX`.)
+
+**Upgrading from a version with usernames:** existing accounts keep signing in with their old username. The first time they do, the app asks them for their email and mobile number, and from then on they sign in with the email.
 
 To test on your phone during development, open `http://<your-computer-ip>:5173` on the same Wi-Fi.
 (Voice input, notifications and fingerprint/face sign-in need HTTPS on a phone, so test those on a deployed copy.)
@@ -62,7 +65,12 @@ Or use Docker: `docker build -t slay . && docker run -p 3000:3000 -v slay-data:/
 Any host that runs Node or Docker and keeps a **persistent disk** will work: a small VPS, Railway, Render or Fly.io with a volume. Put it behind HTTPS, which these hosts usually provide. All data lives in `DATA_DIR`: the SQLite database plus uploaded photos. **Back up that folder.**
 See `.env.example` for every setting.
 
-Team members are normally managed in the app. If every owner is locked out, the command line still works on the server: `node dist/cli/users.js create <username> "<Name>" owner`, or `node dist/cli/users.js password <username>` to reset a password.
+Team members are normally managed in the app, and anyone locked out can use **Forgot password?**. If even that fails (no phone, lost phone), an owner can reset the password under Team, and the command line still works on the server: `node dist/cli/users.js create <email> "<Name>" owner <phone>`, or `node dist/cli/users.js password <email>`.
+
+### Text messages and email
+
+- **SMS (recovery codes):** set `SMS_PROVIDER=sparrow` with `SPARROW_SMS_TOKEN` and `SPARROW_SMS_FROM` (Sparrow SMS, Nepal), or `SMS_PROVIDER=twilio` with `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN` and `TWILIO_FROM`. Until one is set, codes are written to the server log instead of being texted. That's fine for trying the app, but people can't recover their own accounts that way, so the app doesn't ask anyone to confirm their phone until SMS is set up. After you set up SMS, send yourself one recovery code to check it arrives.
+- **Email (security notifications):** set `SMTP_URL` (e.g. `smtps://you%40gmail.com:app-password@smtp.gmail.com`) and `MAIL_FROM`. Every active team member is then emailed when a security notification is raised.
 
 **Fingerprint / face sign-in and your domain:** passkeys are tied to the web address in `APP_URL`. If you move the app to a different domain, everyone signs in once with their password and turns biometrics on again. Nothing else is lost.
 
@@ -91,7 +99,7 @@ server/   Node + Express + SQLite (better-sqlite3)
   src/core/        module system, event bus (live sync), HTTP helpers
   src/db/          connection + ordered migrations
   src/modules/     one folder per feature – each owns its routes and service:
-                   auth (passwords, passkeys, team), security, catalog, customers, orders, payments (eSewa),
+                   auth (email sign-in, passkeys, recovery codes, team), messaging (SMS, email), security, catalog, customers, orders, payments (eSewa),
                    receipts, dashboard, voice, uploads, live
 web/      React + TypeScript (Vite) installable PWA
   src/features/    one folder per screen area (orders, stock, receipts, …)

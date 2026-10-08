@@ -7,8 +7,8 @@ import type { CatalogService } from '../../../server/src/modules/catalog/service
 import type { OrderService } from '../../../server/src/modules/orders/service';
 
 export const DEMO_LOGINS = [
-  { username: 'teza', password: 'demo-teza-123', name: 'Teza' },
-  { username: 'partner', password: 'demo-partner-123', name: 'Partner' },
+  { email: 'teza@slay.demo', password: 'demo-teza-123', name: 'Teza', phone: '9841000001' },
+  { email: 'partner@slay.demo', password: 'demo-partner-123', name: 'Partner', phone: '9841000002' },
 ];
 
 /** A small two-tone fabric swatch as an inline SVG image (stands in for product photos). */
@@ -80,8 +80,10 @@ export async function seedDemo(ctx: AppContext) {
   const orders = service<OrderService>(ctx, 'orders');
 
   const users: AuthUser[] = DEMO_LOGINS.map((u) => {
-    const { id } = auth.createUser(u.username, u.name, u.password, 'owner');
-    return { id, username: u.username, displayName: u.name, role: 'owner', sessionId: 0 };
+    const { id } = auth.createUser({ email: u.email, displayName: u.name, password: u.password, role: 'owner', phone: u.phone });
+    // Sample accounts start with confirmed phones so the demo opens straight away.
+    ctx.db.prepare('UPDATE users SET phone_verified_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+    return { id, username: u.email, displayName: u.name, role: 'owner', sessionId: 0 };
   });
   const [teza, partner] = users;
 

@@ -16,14 +16,17 @@ export function setup() {
   });
   const created = createApp(config);
   const auth = service<AuthService>(created.ctx, 'auth');
-  auth.createUser('teza', 'Teza', 'password-teza', 'owner');
-  auth.createUser('partner', 'Partner', 'password-partner', 'owner');
+  auth.createUser({ email: 'teza@example.com', displayName: 'Teza', password: 'password-teza', role: 'owner', phone: '9841000001' });
+  auth.createUser({ email: 'partner@example.com', displayName: 'Partner', password: 'password-partner', role: 'owner', phone: '9841000002' });
   return { ...created, config };
 }
 
-export async function login(app: any, username: string, password: string) {
+/** Accounts sign in by email; a bare name like "teza" means teza@example.com. */
+export const emailOf = (name: string) => (name.includes('@') ? name : `${name}@example.com`);
+
+export async function login(app: any, name: string, password: string) {
   const agent = request.agent(app);
-  const res = await agent.post('/api/auth/login').set('x-slay', '1').send({ username, password });
+  const res = await agent.post('/api/auth/login').set('x-slay', '1').send({ email: emailOf(name), password });
   if (res.status !== 200) throw new Error(`login failed: ${res.status} ${JSON.stringify(res.body)}`);
   return agent;
 }

@@ -2,6 +2,7 @@ import webpush from 'web-push';
 import { LIVE_EVENTS } from '@slay/shared';
 import type { AppContext } from '../../core/context.js';
 import { getSetting, setSetting } from '../../db/index.js';
+import type { MailService } from '../messaging/mail.js';
 
 /**
  * - `warning` / `critical`: a security notification – a device signing in for the first
@@ -28,6 +29,7 @@ export interface AlertRow {
  *  - stored in the database (shown in the app's alert bell)
  *  - pushed live to every open device (SSE)
  *  - sent as Web Push notifications to subscribed phones (works when the app is closed)
+ *  - emailed to every active team member (when SMTP_URL is set)
  *  - optionally POSTed to ALERT_WEBHOOK_URL (e.g. an ntfy.sh topic, Slack, Telegram bridge)
  */
 export class AlertService {
@@ -86,6 +88,17 @@ export class AlertService {
         }
       }),
     );
+    const mail = this.ctx.services.mail as MailService | undefined;
+    if (mail?.configured) {
+      const to = (this.ctx.db.prepare(`SELECT email FROM users WHERE active = 1 AND email IS NOT NULL`).all() as { email: string }[]).map((u) => u.email);
+      const subject = alert.severity === 'critical' ? 'Slay: urgent security alert' : 'Slay: security notification';
+      const text = `${alert.message}\n\nOpen Slay → More → Security to see details or sign a device out.\n${this.ctx.config.appUrl}`;
+      try {
+        await mail.send(to, subject, text);
+      } catch (err) {
+        console.error('alert email failed', err);
+      }
+    }
     const hook = this.ctx.config.alertWebhookUrl;
     if (hook) {
       try {
