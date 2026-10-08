@@ -7,7 +7,9 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "build:demo": "vite build --mode demo",
+    "preview:demo": "vite preview --mode demo --outDir dist-demo"
   },
   "dependencies": {
     "@simplewebauthn/browser": "^13.3.0",
@@ -18,9 +20,14 @@
     "react-router-dom": "^7.9.4"
   },
   "devDependencies": {
+    "@noble/hashes": "^1.8.0",
     "@types/react": "^19.2.2",
     "@types/react-dom": "^19.2.2",
+    "@types/sql.js": "^1.4.11",
     "@vitejs/plugin-react": "^5.0.4",
+    "buffer": "^6.0.3",
+    "path-to-regexp": "^8.4.2",
+    "sql.js": "^1.14.2",
     "vite": "^7.1.11"
   }
 }

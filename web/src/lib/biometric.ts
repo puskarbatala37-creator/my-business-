@@ -28,6 +28,8 @@ const store = {
 
 /** True when this device has a built-in fingerprint / face sensor the browser can use. */
 export async function biometricAvailable(): Promise<boolean> {
+  // The demo preview runs in a sandboxed page that can't reach the phone's sensor.
+  if (import.meta.env.VITE_DEMO === '1') return false;
   if (!browserSupportsWebAuthn()) return false;
   try {
     return await platformAuthenticatorIsAvailable();

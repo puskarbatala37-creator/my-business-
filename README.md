@@ -21,6 +21,15 @@ It runs as an installable mobile web app (PWA), so one codebase works on **Andro
 
 Returns and exchanges are not built yet, but the data model is ready for them (see *Extending* below).
 
+## Opening the app
+
+| Where | How |
+|---|---|
+| **On your computer** | `npm install`, then `npm run dev`, then open **http://localhost:5173**. On first start, the app asks you to create the owner account; the setup code is printed in the terminal. |
+| **On your phone, same Wi-Fi** | While `npm run dev` is running, open `http://<your-computer's-IP>:5173` on the phone. Vite prints this "Network" address when it starts. |
+| **For real use, anywhere** | Deploy it (see *Deploying* below) and open your own `https://…` address. Then use **Add to Home Screen** on each phone. |
+| **Quick look, no setup** | `npm run build:demo -w web` builds a self-contained **demo preview** in `web/dist-demo`. The whole app, server included, runs inside the browser on sample data, so it can be hosted as static files (`npm run preview:demo -w web` serves it locally). Fingerprint sign-in, notifications and eSewa need the real server, so they don't work in the demo. |
+
 ## Running it
 
 Requires **Node.js 20.12+** (22 recommended).

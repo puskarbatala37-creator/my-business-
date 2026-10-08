@@ -63,6 +63,24 @@ export function LoginPage() {
             {error}
           </div>
         )}
+        {import.meta.env.VITE_DEMO === '1' && (
+          <div className="alert-banner info small">
+            <div>
+              Demo logins: <strong>teza</strong> / <strong>demo-teza-123</strong> or <strong>partner</strong> / <strong>demo-partner-123</strong>
+              <button
+                type="button"
+                className="btn sm block"
+                style={{ marginTop: 8 }}
+                onClick={() => {
+                  setUsername('teza');
+                  setPassword('demo-teza-123');
+                }}
+              >
+                Fill in Teza's demo login
+              </button>
+            </div>
+          </div>
+        )}
 
         {passwordForm ? (
           <form
