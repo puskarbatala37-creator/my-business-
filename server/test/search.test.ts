@@ -6,7 +6,7 @@ async function ready() {
   const s = setup();
   const teza = w(await login(s.app, 'teza', 'password-teza'));
   const cat = await seedCatalog(teza); // Sari → Banarasi Silk (Red, Blue)
-  const kurtaCat = (await teza.post('/api/catalog/categories', { name: 'Kurta' })).body.id;
+  const kurtaCat = (await teza.get('/api/catalog')).body.categories.find((c: any) => c.name === 'Kurta').id;
   await teza.post('/api/catalog/products', { category_id: kurtaCat, name: 'Kurta Set', variants: [{ color: 'Black', stock: 10, price: 1800 }] });
   const tree = (await teza.get('/api/catalog')).body.categories;
   const black = tree.find((c: any) => c.name === 'Kurta').products[0].variants[0].id;

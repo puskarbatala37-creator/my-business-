@@ -17,7 +17,9 @@ const zVariant = z.object({
 });
 
 const zProduct = z.object({
-  category_id: z.coerce.number().int().positive(),
+  category_id: z.coerce.number().int().positive().nullable().optional(),
+  /** Create a new product type with this name (or reuse one with the same name). */
+  new_category: zText(80).nullable().optional(),
   name: zText(120).min(1, 'name is required'),
   description: zText(2000).optional(),
   sizes: zText(300).optional(),
@@ -50,11 +52,20 @@ export const catalogModule: AppModule = {
     });
 
     r.post('/products', (req, res) => {
-      const b = parse(zProduct.extend({ variants: z.array(zVariant).max(50).optional() }), req.body);
+      const b = parse(
+        zProduct
+          .extend({
+            /** Total pieces in stock, counted when adding the product. */
+            total_stock: z.coerce.number().int().min(0).max(100000).optional(),
+            variants: z.array(zVariant).max(50).optional(),
+          })
+          .refine((p) => p.category_id || p.new_category?.trim(), 'choose a category or add a new one'),
+        req.body,
+      );
       res.status(201).json({ id: catalog().createProduct(b, req.user!) });
     });
     r.patch('/products/:id', (req, res) => {
-      const b = parse(zProduct.partial().extend({ archived: z.boolean().optional() }), req.body);
+      const b = parse(zProduct.omit({ new_category: true }).partial().extend({ archived: z.boolean().optional() }), req.body);
       catalog().updateProduct(idParam(req), b, req.user!);
       res.json({ ok: true });
     });

@@ -71,7 +71,8 @@ export class CatalogService {
 
   createCategory(name: string, voiceAliases = '') {
     try {
-      const row = this.db.prepare('INSERT INTO categories (name, voice_aliases) VALUES (?, ?) RETURNING *').get(name, voiceAliases);
+      const next = (this.db.prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM categories').get() as { n: number }).n;
+      const row = this.db.prepare('INSERT INTO categories (name, voice_aliases, sort_order) VALUES (?, ?, ?) RETURNING *').get(name, voiceAliases, next);
       this.changed();
       return row;
     } catch (e: any) {
@@ -92,19 +93,54 @@ export class CatalogService {
     this.changed();
   }
 
+  /**
+   * Adds a product with its colours. `total_stock` is the number of pieces the owner counted;
+   * with one colour it all goes to that colour, with several the colour counts must add up to it.
+   * `new_category` creates a new product type on the spot (or reuses one with the same name).
+   */
   createProduct(
-    input: { category_id: number; name: string; description?: string; sizes?: string; voice_aliases?: string; variants?: VariantInput[] },
+    input: {
+      category_id?: number | null;
+      new_category?: string | null;
+      name: string;
+      description?: string;
+      sizes?: string;
+      voice_aliases?: string;
+      total_stock?: number;
+      variants?: VariantInput[];
+    },
     user: AuthUser,
   ) {
-    const id = this.db.transaction(() => {
-      const cat = this.db.prepare('SELECT id FROM categories WHERE id = ?').get(input.category_id);
-      if (!cat) throw badRequest('Category not found');
+    const variants = (input.variants ?? []).map((v) => ({ ...v }));
+    if (input.total_stock !== undefined) {
+      if (!variants.length) throw badRequest('Add at least one colour for the stock');
+      if (variants.length === 1 && variants[0].stock === undefined) variants[0].stock = input.total_stock;
+      const sum = variants.reduce((n, v) => n + (v.stock ?? 0), 0);
+      if (sum !== input.total_stock) {
+        throw badRequest(`The colours add up to ${sum} piece${sum === 1 ? '' : 's'}, but the total stock is ${input.total_stock}. Make them match.`, { sum, total: input.total_stock });
+      }
+    }
+    const { id, categoryCreated } = this.db.transaction(() => {
+      let categoryId = input.category_id ?? null;
+      let categoryCreated = false;
+      if (input.new_category?.trim()) {
+        const name = input.new_category.trim();
+        const existing = this.db.prepare('SELECT id FROM categories WHERE name = ?').get(name) as { id: number } | undefined;
+        if (existing) categoryId = existing.id;
+        else {
+          const next = (this.db.prepare('SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM categories').get() as { n: number }).n;
+          categoryId = (this.db.prepare('INSERT INTO categories (name, sort_order) VALUES (?, ?) RETURNING id').get(name, next) as { id: number }).id;
+          categoryCreated = true;
+        }
+      }
+      if (!categoryId || !this.db.prepare('SELECT id FROM categories WHERE id = ?').get(categoryId)) throw badRequest('Choose a category');
       const p = this.db
         .prepare('INSERT INTO products (category_id, name, description, sizes, voice_aliases) VALUES (?, ?, ?, ?, ?) RETURNING id')
-        .get(input.category_id, input.name, input.description ?? '', input.sizes ?? '', input.voice_aliases ?? '') as { id: number };
-      for (const v of input.variants ?? []) this.insertVariant(p.id, v, user);
-      return p.id;
+        .get(categoryId, input.name, input.description ?? '', input.sizes ?? '', input.voice_aliases ?? '') as { id: number };
+      for (const v of variants) this.insertVariant(p.id, v, user);
+      return { id: p.id, categoryCreated };
     })();
+    if (categoryCreated) logActivity(this.ctx, user.id, 'category_created', 'category', null, { name: input.new_category });
     logActivity(this.ctx, user.id, 'product_created', 'product', id, { name: input.name });
     this.changed(user);
     return id;

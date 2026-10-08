@@ -42,7 +42,7 @@ export function StockPage() {
           {!!data && <div className="small muted">{totalUnits} pieces in stock</div>}
         </div>
         {isLoading && <Spinner />}
-        {!isLoading && !data?.categories.length && <Empty>Start by adding a category, e.g. “Sari”, then add products with their colours.</Empty>}
+        {!isLoading && !data?.categories.some((c) => c.products.length) && <Empty>No products yet. Tap “+ Product” to add your first one with its stock.</Empty>}
         {categories.map((c) => (
           <section key={c.id} className="section">
             <div className="section-title">
@@ -58,7 +58,10 @@ export function StockPage() {
                 {c.products.map((p) => (
                   <div key={p.id} className="card tight">
                     <Link to={`/stock/${p.id}`} className="row between" style={{ color: 'inherit', marginBottom: 6 }}>
-                      <span className="strong">{p.name}</span>
+                      <span>
+                        <span className="strong">{p.name}</span>{' '}
+                        <span className="small muted num">· {p.variants.reduce((n, v) => n + v.stock, 0)} pcs</span>
+                      </span>
                       <span className="small muted">
                         Edit <Icon name="edit" size={14} />
                       </span>

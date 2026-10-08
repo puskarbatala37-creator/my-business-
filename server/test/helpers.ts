@@ -41,9 +41,10 @@ export const w = (agent: any) => ({
 });
 
 export async function seedCatalog(api: ReturnType<typeof w>) {
-  const cat = await api.post('/api/catalog/categories', { name: 'Sari', voice_aliases: '' });
+  // Kurta, Sari and Lehenga exist from the start.
+  const sari = (await api.get('/api/catalog')).body.categories.find((c: any) => c.name === 'Sari');
   const prod = await api.post('/api/catalog/products', {
-    category_id: cat.body.id,
+    category_id: sari.id,
     name: 'Banarasi Silk',
     sizes: 'Free',
     variants: [
@@ -52,9 +53,9 @@ export async function seedCatalog(api: ReturnType<typeof w>) {
     ],
   });
   const tree = await api.get('/api/catalog');
-  const variants = tree.body.categories[0].products[0].variants;
+  const variants = tree.body.categories.find((c: any) => c.name === 'Sari').products[0].variants;
   return {
-    categoryId: cat.body.id,
+    categoryId: sari.id as number,
     productId: prod.body.id,
     red: variants.find((v: any) => v.color === 'Red').id as number,
     blue: variants.find((v: any) => v.color === 'Blue').id as number,

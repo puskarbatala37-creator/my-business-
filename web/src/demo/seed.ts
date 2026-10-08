@@ -89,7 +89,10 @@ export async function seedDemo(ctx: AppContext) {
 
   const v: Record<string, number> = {};
   for (const c of CATALOG) {
-    const cat = catalog.createCategory(c.category, c.aliases) as { id: number };
+    // Kurta, Sari and Lehenga exist from the start; anything else is created.
+    const cat =
+      (ctx.db.prepare('SELECT id FROM categories WHERE name = ?').get(c.category) as { id: number } | undefined) ??
+      (catalog.createCategory(c.category, c.aliases) as { id: number });
     for (const p of c.products) {
       // Seed with extra stock so the sample orders below can be taken from it.
       const pid = catalog.createProduct(
