@@ -26,6 +26,12 @@ export function SecurityPage() {
   const alerts = useQuery({ queryKey: ['alerts'], queryFn: () => api.get<{ alerts: Alert[]; unread: number }>('/api/security/alerts') });
   const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => api.get<{ sessions: SessionRow[] }>('/api/security/sessions') });
   const [push, setPush] = useState<boolean | null>(null);
+  const devices = useQuery({
+    queryKey: ['trusted-devices'],
+    queryFn: () => api.get<{ devices: { user_id: number; device_id: string; label: string; first_seen: string; last_seen_at: string | null; user_name: string; current: boolean }[] }>('/api/security/devices'),
+  });
+  const notifications = (alerts.data?.alerts ?? []).filter((a) => a.severity !== 'info');
+  const activity = (alerts.data?.alerts ?? []).filter((a) => a.severity === 'info');
   const passkeys = useQuery({ queryKey: ['passkeys'], queryFn: () => api.get<{ passkeys: { id: number; label: string; created_at: string; last_used_at: string | null }[] }>('/api/auth/passkeys') });
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioHere, setBioHere] = useState(biometricEnrolledHere());
@@ -126,18 +132,21 @@ export function SecurityPage() {
         </section>
 
         <div className="section-title">
-          <h2>Alerts</h2>
+          <h2>Security notifications</h2>
+        </div>
+        <div className="tiny muted" style={{ marginTop: -4 }}>
+          Sent when a device signs in for the first time, or when something looks suspicious (wrong passwords, lockouts, unusual activity). Sign-ins from trusted devices are not notified.
         </div>
         {alerts.isLoading ? (
           <Spinner />
-        ) : !alerts.data?.alerts.length ? (
-          <Empty>No alerts – all quiet.</Empty>
+        ) : !notifications.length ? (
+          <Empty>Nothing suspicious – all quiet.</Empty>
         ) : (
           <div className="stack" style={{ gap: 8 }}>
-            {alerts.data.alerts.map((a) => (
+            {notifications.map((a) => (
               <div key={a.id} className={`alert-banner ${a.severity === 'critical' ? '' : a.severity}`}>
                 <div className="grow">
-                  <div className="strong small">{a.severity === 'critical' ? 'Critical' : a.severity === 'warning' ? 'Warning' : 'Info'}</div>
+                  <div className="strong small">{a.severity === 'critical' ? 'Critical' : 'Warning'}</div>
                   <div>{a.message}</div>
                   <div className="tiny" style={{ opacity: 0.8, marginTop: 2 }}>
                     {dateTime(a.created_at)}
@@ -147,6 +156,41 @@ export function SecurityPage() {
             ))}
           </div>
         )}
+
+        <div className="section-title">
+          <h2>Trusted devices</h2>
+        </div>
+        <div className="tiny muted" style={{ marginTop: -4 }}>
+          Devices that have signed in before. Remove one you don’t recognise or no longer use – it is signed out, and its next sign-in will notify everyone again.
+        </div>
+        <div className="list">
+          {devices.data?.devices.map((d) => (
+            <div key={d.user_id + d.device_id} className="list-item">
+              <div className="grow">
+                <div className="strong">
+                  {d.user_name} · {d.label || 'Device'}
+                </div>
+                <div className="tiny muted">
+                  {d.current ? 'This device' : `Trusted since ${dateTime(d.first_seen)}`}
+                  {!d.current && d.last_seen_at && ` · last active ${dateTime(d.last_seen_at)}`}
+                </div>
+              </div>
+              {!d.current && (
+                <button
+                  className="btn sm danger"
+                  onClick={async () => {
+                    if (!confirm(`Remove ${d.user_name}'s ${d.label} from trusted devices? It will be signed out.`)) return;
+                    await api.post('/api/security/devices/forget', { user_id: d.user_id, device_id: d.device_id });
+                    devices.refetch();
+                    sessions.refetch();
+                  }}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
 
         <div className="section-title">
           <h2>Signed-in devices</h2>
@@ -177,6 +221,21 @@ export function SecurityPage() {
             </div>
           ))}
         </div>
+
+        {activity.length > 0 && (
+          <details className="card">
+            <summary className="strong small" style={{ cursor: 'pointer' }}>
+              Activity log ({activity.length})
+            </summary>
+            <div className="stack" style={{ gap: 6, marginTop: 8 }}>
+              {activity.map((a) => (
+                <div key={a.id} className="small">
+                  {a.message} <span className="tiny muted">· {dateTime(a.created_at)}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </main>
     </>
   );

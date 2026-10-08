@@ -3,7 +3,15 @@ import { LIVE_EVENTS } from '@slay/shared';
 import type { AppContext } from '../../core/context.js';
 import { getSetting, setSetting } from '../../db/index.js';
 
+/**
+ * - `warning` / `critical`: a security notification – a device signing in for the first
+ *   time, or something suspicious (failed attempts, lockouts, unusual activity).
+ *   Pushed to every team member's phone, shown as a toast and counted on the bell.
+ * - `info`: routine activity, only recorded in the Security log (no notification).
+ */
 export type Severity = 'info' | 'warning' | 'critical';
+
+export const isNotification = (s: Severity) => s !== 'info';
 
 export interface AlertRow {
   id: number;
@@ -46,7 +54,7 @@ export class AlertService {
       .prepare('INSERT INTO security_alerts (kind, severity, message, meta, user_id) VALUES (?, ?, ?, ?, ?) RETURNING *')
       .get(kind, severity, message, JSON.stringify(meta), userId) as AlertRow;
     bus.publish(LIVE_EVENTS.alert, { actor: null, ids: [row.id], message, severity });
-    void this.deliver(row);
+    if (isNotification(severity)) void this.deliver(row);
     return row;
   }
 
@@ -110,7 +118,7 @@ export class AlertService {
     const r = this.ctx.db
       .prepare(
         `SELECT COUNT(*) AS n FROM security_alerts a
-          WHERE NOT EXISTS (SELECT 1 FROM alert_reads r WHERE r.alert_id = a.id AND r.user_id = ?)`,
+          WHERE a.severity <> 'info' AND NOT EXISTS (SELECT 1 FROM alert_reads r WHERE r.alert_id = a.id AND r.user_id = ?)`,
       )
       .get(userId) as { n: number };
     return r.n;

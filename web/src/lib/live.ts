@@ -11,7 +11,7 @@ const INVALIDATES: Record<string, string[][]> = {
   [LIVE_EVENTS.payment]: [['orders'], ['order'], ['dashboard']],
   [LIVE_EVENTS.customer]: [['customers'], ['customer']],
   [LIVE_EVENTS.receipt]: [['receipts'], ['dashboard']],
-  [LIVE_EVENTS.alert]: [['alerts']],
+  [LIVE_EVENTS.alert]: [['alerts'], ['trusted-devices']],
 };
 
 /**

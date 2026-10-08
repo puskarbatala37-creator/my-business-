@@ -18,7 +18,11 @@ export function Layout() {
   const toast = useToast();
   const connected = useLiveSync(me?.user.id, (e) => {
     // Tell this user what a teammate just did (not their own actions).
-    if (e.type === LIVE_EVENTS.alert) toast(e.severity === 'info' ? `${e.message}` : `⚠ ${e.message}`, e.severity !== 'info');
+    // Security notifications (first sign-in on a device, suspicious activity) pop up;
+    // routine activity is only recorded in the Security log.
+    if (e.type === LIVE_EVENTS.alert) {
+      if (e.severity !== 'info') toast(`⚠ ${e.message}`, true);
+    }
     else if (e.message && e.actor && e.actor.id !== me?.user.id) toast(e.message);
     else if (e.type === LIVE_EVENTS.payment && e.message) toast(e.message);
   });

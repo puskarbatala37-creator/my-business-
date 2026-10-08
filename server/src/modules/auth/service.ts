@@ -150,16 +150,27 @@ export class AuthService {
     return this.startSession(user, input, 'password');
   }
 
-  /** Creates a session after a successful password or biometric check. */
+  /**
+   * Creates a session after a successful password or biometric check.
+   * A device that has signed in successfully before is trusted: its everyday
+   * sign-ins are not notified. Only a device's FIRST sign-in raises a notification.
+   */
   startSession(user: UserRow, client: ClientInfo, method: 'password' | 'biometric') {
     const { db } = this.ctx;
-    const known = db.prepare('SELECT 1 FROM known_devices WHERE user_id = ? AND device_id = ?').get(user.id, client.deviceId);
-    if (!known) {
-      const hasAny = db.prepare('SELECT 1 FROM known_devices WHERE user_id = ?').get(user.id);
+    const trusted = db.prepare('SELECT 1 FROM known_devices WHERE user_id = ? AND device_id = ?').get(user.id, client.deviceId);
+    if (!trusted) {
+      const firstEver = !db.prepare('SELECT 1 FROM known_devices WHERE user_id = ?').get(user.id);
       db.prepare('INSERT OR IGNORE INTO known_devices (user_id, device_id, label) VALUES (?, ?, ?)').run(user.id, client.deviceId, describeDevice(client.userAgent));
-      if (hasAny) {
-        this.alerts.raise('new_device', 'warning', `${user.display_name} signed in from a new device: ${describeDevice(client.userAgent)} (IP ${client.ip}). If this wasn't them, sign that device out under Security.`, { ip: client.ip }, user.id);
-      }
+      const device = `${describeDevice(client.userAgent)} (IP ${client.ip})`;
+      this.alerts.raise(
+        'new_device',
+        'warning',
+        firstEver
+          ? `${user.display_name} signed in for the first time, on ${device}. If this wasn't them, sign that device out under Security.`
+          : `${user.display_name} signed in from a device not used before: ${device}. If this wasn't them, sign that device out under Security.`,
+        { ip: client.ip },
+        user.id,
+      );
     }
     const token = crypto.randomBytes(32).toString('base64url');
     const expires = new Date(Date.now() + this.ctx.config.sessionDays * 86_400_000);
@@ -201,7 +212,7 @@ export class AuthService {
     this.setPassword(user.id, next);
     // Sign out every other device of this user.
     this.ctx.db.prepare('DELETE FROM sessions WHERE user_id = ? AND id <> ?').run(user.id, user.sessionId);
-    this.alerts.raise('password_changed', 'warning', `${user.displayName} changed their password. Their other devices were signed out.`, {}, user.id);
+    this.alerts.raise('password_changed', 'info', `${user.displayName} changed their password. Their other devices were signed out.`, {}, user.id);
     logActivity(this.ctx, user.id, 'password_changed', 'user', user.id);
   }
 
@@ -257,7 +268,7 @@ export class AuthService {
     if (patch.active === true && !u.active) changes.push('switched their account back on');
     if (patch.password) changes.push('reset their password');
     if (changes.length) {
-      this.alerts.raise('team_member_changed', patch.password || patch.role === 'owner' ? 'warning' : 'info', `${by.displayName} ${changes.join(' and ')} (${u.display_name}).`, {}, by.id);
+      this.alerts.raise('team_member_changed', 'info', `${by.displayName} ${changes.join(' and ')} (${u.display_name}).`, {}, by.id);
     }
     logActivity(this.ctx, by.id, 'team_member_updated', 'user', id, { ...patch, password: patch.password ? '***' : undefined });
   }
