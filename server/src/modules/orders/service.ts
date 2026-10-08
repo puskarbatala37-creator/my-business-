@@ -48,7 +48,7 @@ export interface OrderCreateInput extends OrderInput {
 export interface OrderListFilters {
   q?: string;
   fulfillment?: FulfillmentStatus;
-  payment?: PaymentStatus;
+  payment?: PaymentStatus | 'open';
   state?: string;
   from?: string;
   to?: string;
@@ -82,7 +82,8 @@ export class OrderService {
       args.push(like, like, like, like, like);
     }
     if (f.fulfillment) (where.push('o.fulfillment_status = ?'), args.push(f.fulfillment));
-    if (f.payment) (where.push('o.payment_status = ?'), args.push(f.payment));
+    if (f.payment === 'open') where.push(`o.payment_status <> 'paid'`);
+    else if (f.payment) (where.push('o.payment_status = ?'), args.push(f.payment));
     if (f.state && f.state !== 'all') (where.push('o.state = ?'), args.push(f.state));
     if (f.from) (where.push('o.order_date >= ?'), args.push(f.from));
     if (f.to) (where.push('o.order_date <= ?'), args.push(f.to));

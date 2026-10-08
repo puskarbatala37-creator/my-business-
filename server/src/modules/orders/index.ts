@@ -45,7 +45,7 @@ export const ordersModule: AppModule = {
         z.object({
           q: z.string().optional(),
           fulfillment: z.enum(FULFILLMENT_STATUSES).optional(),
-          payment: z.enum(PAYMENT_STATUSES).optional(),
+          payment: z.enum([...PAYMENT_STATUSES, 'open']).optional(),
           state: z.string().optional().default('active'),
           from: zDate.optional(),
           to: zDate.optional(),
