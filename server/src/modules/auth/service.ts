@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 import type { AppContext, AuthUser } from '../../core/context.js';
 import { logActivity, service } from '../../core/context.js';
 import { conflict, HttpError, notFound } from '../../core/http.js';
+import { getSetting, setSetting } from '../../db/index.js';
 import { maskPhone, normalizeMobile, type SmsService } from '../messaging/sms.js';
 import type { AlertService } from '../security/service.js';
 
@@ -11,6 +12,16 @@ export const DEVICE_COOKIE = 'slay_device';
 
 export const ROLES = ['owner', 'member'] as const;
 export type Role = (typeof ROLES)[number];
+
+/**
+ * Who may create their own account from the sign-in screen:
+ *  - approval: anyone can sign up, an owner approves before they can sign in (default)
+ *  - open:     anyone with the link joins straight away as a team member
+ *  - closed:   no sign-ups; owners add people under Team
+ */
+export const SIGNUP_MODES = ['approval', 'open', 'closed'] as const;
+export type SignupMode = (typeof SIGNUP_MODES)[number];
+const SIGNUPS_PER_IP_PER_HOUR = 5;
 
 const FAILS_BEFORE_ALERT = 3;
 const FAILS_BEFORE_LOCK = 5;
@@ -35,6 +46,7 @@ export interface UserRow {
   locked_until: string | null;
   role: Role;
   active: number;
+  pending: number;
 }
 
 export interface ClientInfo {
@@ -231,6 +243,10 @@ export class AuthService {
       }
       throw new HttpError(401, 'Wrong email or password');
     }
+    if (user.pending) {
+      record(false);
+      throw new HttpError(403, 'Your account is waiting for an owner to approve it. You can sign in as soon as they do.', 'pending_approval');
+    }
     if (!user.active) {
       record(false);
       this.alerts.raiseOnce(`disabled:${user.id}`, 60, 'disabled_account_login', 'warning', `Someone signed in with the correct password for ${user.display_name}, whose account is switched off (IP ${input.ip}).`, { ip: input.ip }, user.id);
@@ -284,7 +300,7 @@ export class AuthService {
       .prepare(
         `SELECT s.id AS session_id, s.last_seen_at, u.id, u.username, u.display_name, u.role
            FROM sessions s JOIN users u ON u.id = s.user_id
-          WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = 1`,
+          WHERE s.token_hash = ? AND s.expires_at > ? AND u.active = 1 AND u.pending = 0`,
       )
       .get(hashToken(token), new Date().toISOString()) as any;
     if (!row) return null;
@@ -314,13 +330,80 @@ export class AuthService {
     return this.ctx.db
       .prepare(
         `SELECT u.id, COALESCE(u.email, u.username) AS email, u.email IS NULL AS needs_email, u.phone IS NOT NULL AS has_phone,
-                u.display_name AS displayName, u.role, u.active, u.created_at,
+                u.display_name AS displayName, u.role, u.active, u.pending, u.created_at,
                 (SELECT MAX(last_seen_at) FROM sessions s WHERE s.user_id = u.id) AS last_seen_at,
                 (SELECT COUNT(*) FROM passkeys p WHERE p.user_id = u.id) AS passkeys
-           FROM users u ORDER BY u.active DESC, u.role = 'owner' DESC, u.display_name`,
+           FROM users u ORDER BY u.pending DESC, u.active DESC, u.role = 'owner' DESC, u.display_name`,
       )
       .all()
-      .map((u: any) => ({ ...u, active: !!u.active, needs_email: !!u.needs_email, has_phone: !!u.has_phone }));
+      .map((u: any) => ({ ...u, active: !!u.active, pending: !!u.pending, needs_email: !!u.needs_email, has_phone: !!u.has_phone }));
+  }
+
+  // ── Self sign-up ────────────────────────────────────────────────────
+
+  get signupMode(): SignupMode {
+    const m = getSetting(this.ctx.db, 'signup_mode');
+    return (SIGNUP_MODES as readonly string[]).includes(m ?? '') ? (m as SignupMode) : 'approval';
+  }
+
+  setSignupMode(by: AuthUser, mode: SignupMode) {
+    if (mode === this.signupMode) return;
+    setSetting(this.ctx.db, 'signup_mode', mode);
+    const label = { approval: 'anyone can sign up, an owner approves them first', open: 'anyone with the link can sign up and join straight away', closed: 'sign-ups are switched off' }[mode];
+    // Opening sign-ups to everyone is a security-relevant change.
+    this.alerts.raise('signup_mode_changed', mode === 'open' ? 'warning' : 'info', `${by.displayName} changed who can create an account: ${label}.`, {}, by.id);
+    logActivity(this.ctx, by.id, 'signup_mode_changed', 'settings', null, { mode });
+  }
+
+  /**
+   * Someone creates their own account from the sign-in screen. Depending on the owners' setting
+   * they wait for approval, join straight away as a team member, or can't sign up at all.
+   */
+  signup(input: { email: string; displayName: string; phone: string; password: string }, client: ClientInfo) {
+    if (this.userCount() === 0) throw new HttpError(409, 'This app has not been set up yet. The first owner creates their account with the setup code.');
+    const mode = this.signupMode;
+    if (mode === 'closed') throw new HttpError(403, 'New accounts are added by an owner. Ask them to add you under More → Team.', 'signups_closed');
+    const since = new Date(Date.now() - 3600_000).toISOString();
+    const recent = (this.ctx.db.prepare(`SELECT COUNT(*) AS n FROM login_attempts WHERE ip = ? AND username LIKE 'signup:%' AND created_at >= ?`).get(client.ip, since) as { n: number }).n;
+    if (recent >= SIGNUPS_PER_IP_PER_HOUR) throw new HttpError(429, 'Too many sign-ups from this connection. Please try again in an hour.');
+
+    const { id } = this.createUser({ email: input.email, displayName: input.displayName, password: input.password, phone: input.phone, role: 'member' });
+    const pending = mode === 'approval';
+    if (pending) this.ctx.db.prepare('UPDATE users SET pending = 1 WHERE id = ?').run(id);
+    this.recordAttempt(`signup:${normalizeEmail(input.email)}`, id, client, true);
+    const email = normalizeEmail(input.email);
+    logActivity(this.ctx, id, 'signed_up', 'user', id, { pending, ip: client.ip });
+    this.alerts.raise(
+      pending ? 'signup_request' : 'signup_joined',
+      'warning',
+      pending
+        ? `${input.displayName.trim()} (${email}) signed up and is waiting for approval. Approve or decline under More → Team.`
+        : `${input.displayName.trim()} (${email}) created an account and joined the team (sign-ups are open to anyone with the link).`,
+      { ip: client.ip },
+      id,
+    );
+    return { pending, user: this.getUser(id) };
+  }
+
+  approve(by: AuthUser, id: number) {
+    const u = this.getUser(id);
+    if (!u.pending) throw new HttpError(400, `${u.display_name} is already approved`);
+    this.ctx.db.prepare('UPDATE users SET pending = 0 WHERE id = ?').run(id);
+    this.alerts.raise('signup_approved', 'info', `${by.displayName} approved ${u.display_name} (${u.email}) – they can sign in now.`, {}, by.id);
+    logActivity(this.ctx, by.id, 'signup_approved', 'user', id);
+  }
+
+  /** Declining removes the request entirely (they never had access, so there is nothing to keep). */
+  decline(by: AuthUser, id: number) {
+    const u = this.getUser(id);
+    if (!u.pending) throw new HttpError(400, 'Only sign-up requests can be declined. To stop someone signing in, switch their account off.');
+    this.ctx.db.transaction(() => {
+      this.ctx.db.prepare('DELETE FROM login_attempts WHERE user_id = ?').run(id);
+      this.ctx.db.prepare('UPDATE security_alerts SET user_id = NULL WHERE user_id = ?').run(id);
+      this.ctx.db.prepare('DELETE FROM users WHERE id = ?').run(id);
+    })();
+    this.alerts.raise('signup_declined', 'info', `${by.displayName} declined the sign-up from ${u.display_name} (${u.email}).`, {}, by.id);
+    logActivity(this.ctx, by.id, 'signup_declined', 'user', null, { email: u.email });
   }
 
   addMember(by: AuthUser, input: { email: string; displayName: string; password: string; role: Role; phone?: string | null }) {

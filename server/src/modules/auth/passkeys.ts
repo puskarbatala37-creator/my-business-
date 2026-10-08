@@ -123,7 +123,7 @@ export class PasskeyService {
     };
     if (!pk) throw fail('This fingerprint / face login is no longer registered. Sign in with your password and turn it on again.');
     const user = this.auth.getUser(pk.user_id);
-    if (!user.active) throw fail('This account has been switched off.', user);
+    if (!user.active || user.pending) throw fail(user.pending ? 'Your account is waiting for an owner to approve it.' : 'This account has been switched off.', user);
     let result;
     try {
       result = await verifyAuthenticationResponse({

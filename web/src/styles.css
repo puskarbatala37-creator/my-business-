@@ -292,3 +292,7 @@ textarea.input { min-height: 80px; resize: vertical; }
 
 /* One-time code */
 .code-input { font-size: 24px; letter-spacing: 0.4em; text-align: center; }
+
+/* Stacked choice buttons (e.g. who can create an account) */
+.option { display: flex; flex-direction: column; gap: 2px; text-align: left; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
+.option.on { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-soft); }

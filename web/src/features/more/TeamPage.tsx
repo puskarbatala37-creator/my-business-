@@ -8,6 +8,13 @@ import { dateTime } from '../../lib/format';
 import type { TeamMember } from '../../lib/types';
 
 type Role = 'owner' | 'member';
+type SignupMode = 'approval' | 'open' | 'closed';
+
+const SIGNUP_OPTIONS: { value: SignupMode; label: string; sub: string }[] = [
+  { value: 'approval', label: 'Anyone, with owner approval (recommended)', sub: '“Create an account” is on the sign-in screen; an owner approves each new person here first.' },
+  { value: 'open', label: 'Anyone with the link, straight away', sub: 'New accounts join as team members immediately. Only use this if the app’s address stays private.' },
+  { value: 'closed', label: 'Only people owners add', sub: 'No sign-ups – add people with “Add team member”.' },
+];
 
 /**
  * Team accounts. Adding someone = name + email + a starting password. They add (and confirm)
@@ -20,6 +27,20 @@ export function TeamPage() {
   const q = useQuery({ queryKey: ['team'], queryFn: () => api.get<{ team: TeamMember[] }>('/api/auth/team') });
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<TeamMember | null>(null);
+  const qc = useQueryClient();
+  const toast = useToast();
+  const mode = useQuery({ queryKey: ['signup-mode-team'], queryFn: () => api.get<{ mode: SignupMode }>('/api/auth/team/signup-mode') });
+  const requests = q.data?.team.filter((u) => u.pending) ?? [];
+  const act = async (fn: () => Promise<unknown>, done: string) => {
+    try {
+      await fn();
+      qc.invalidateQueries({ queryKey: ['team'] });
+      qc.invalidateQueries({ queryKey: ['me'] });
+      toast(done);
+    } catch (e) {
+      toast((e as Error).message, true);
+    }
+  };
 
   return (
     <>
@@ -30,11 +51,39 @@ export function TeamPage() {
             <Icon name="team" size={20} /> Add team member
           </button>
         )}
+        {isOwner && requests.length > 0 && (
+          <section className="stack" style={{ gap: 8 }}>
+            <div className="section-title">
+              <h2>Waiting for approval ({requests.length})</h2>
+            </div>
+            <div className="list">
+              {requests.map((u) => (
+                <div key={u.id} className="list-item" style={{ flexWrap: 'wrap' }}>
+                  <div className="grow">
+                    <div className="strong">{u.displayName}</div>
+                    <div className="tiny muted">
+                      {u.email} · signed up {dateTime(u.created_at)}
+                    </div>
+                  </div>
+                  <div className="row" style={{ gap: 6 }}>
+                    <button type="button" className="btn sm" onClick={() => act(() => api.post(`/api/auth/team/${u.id}/decline`), `Declined ${u.displayName}`)}>
+                      Decline
+                    </button>
+                    <button type="button" className="btn sm primary" onClick={() => act(() => api.post(`/api/auth/team/${u.id}/approve`), `${u.displayName} can sign in now`)}>
+                      Approve
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="tiny muted">Only approve people you know – they'll see orders, customers and sales.</div>
+          </section>
+        )}
         {!q.data ? (
           <Spinner />
         ) : (
           <div className="list">
-            {q.data.team.map((u) => (
+            {q.data.team.filter((u) => !u.pending).map((u) => (
               <button
                 key={u.id}
                 type="button"
@@ -64,6 +113,32 @@ export function TeamPage() {
               </button>
             ))}
           </div>
+        )}
+        {isOwner && mode.data && (
+          <section className="card stack">
+            <h2>Who can create an account</h2>
+            <div className="stack" role="radiogroup" aria-label="Who can create an account" style={{ gap: 6 }}>
+              {SIGNUP_OPTIONS.map((o) => (
+                <button
+                  key={o.value}
+                  type="button"
+                  role="radio"
+                  aria-checked={mode.data.mode === o.value}
+                  className={`option ${mode.data.mode === o.value ? 'on' : ''}`}
+                  onClick={() =>
+                    mode.data.mode !== o.value &&
+                    act(async () => {
+                      await api.put('/api/auth/team/signup-mode', { mode: o.value });
+                      await mode.refetch();
+                    }, 'Saved')
+                  }
+                >
+                  <span className="strong">{o.label}</span>
+                  <span className="tiny muted">{o.sub}</span>
+                </button>
+              ))}
+            </div>
+          </section>
         )}
         <div className="tiny muted">
           <strong>Members</strong> can take orders, update stock and save bills. <strong>Owners</strong> can also add or switch off team members and reset passwords.

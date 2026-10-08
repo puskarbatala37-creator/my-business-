@@ -17,6 +17,8 @@ export interface Profile extends Omit<User, 'email'> {
 }
 
 export interface TeamMember extends User {
+  /** Signed up themselves and waiting for an owner's approval. */
+  pending: boolean;
   needs_email: boolean;
   has_phone: boolean;
   active: boolean;

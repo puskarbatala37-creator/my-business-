@@ -116,7 +116,7 @@ export class RecoveryService {
     this.auth.checkIpLimit(client.ip);
     const u = this.auth.findByLogin(email);
     const generic = { ok: true, message: 'If this email belongs to an account with a mobile number, we have sent a 6-digit code to that phone.' };
-    if (!u || !u.active || !u.phone) {
+    if (!u || !u.active || u.pending || !u.phone) {
       this.auth.recordAttempt(email, u?.id ?? null, client, false);
       return generic;
     }
@@ -127,7 +127,7 @@ export class RecoveryService {
   async finish(input: { email: string; code: string; password: string }, client: ClientInfo) {
     this.auth.checkIpLimit(client.ip);
     const u = this.auth.findByLogin(input.email);
-    if (!u || !u.active || !u.phone) {
+    if (!u || !u.active || u.pending || !u.phone) {
       this.auth.recordAttempt(input.email, u?.id ?? null, client, false);
       throw new HttpError(400, 'That code is not right. Ask for a new one.', 'bad_code');
     }

@@ -78,6 +78,9 @@ export async function startDemoServer(onChange: () => void) {
       .prepare(`UPDATE users SET email = ?, username = ?, phone = COALESCE(phone, ?), phone_verified_at = COALESCE(phone_verified_at, ?) WHERE username = ? AND email IS NULL`)
       .run(`${name}@slay.demo`, `${name}@slay.demo`, phone, new Date().toISOString(), name);
   }
+  // In the demo anyone can create an account and get straight in. (The real app defaults to
+  // owner approval – owners change it under More → Team.)
+  ctx.db.prepare(`INSERT OR IGNORE INTO settings (key, value) VALUES ('signup_mode', 'open')`).run();
   const isNew = (ctx.db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n === 0;
   if (isNew) await seedDemo(ctx);
 

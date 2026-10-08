@@ -26,6 +26,8 @@ export function LoginPage() {
   const [bio, setBio] = useState<boolean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [recovering, setRecovering] = useState(false);
+  const [signingUp, setSigningUp] = useState(false);
+  const signupMode = useQuery({ queryKey: ['signup-mode'], queryFn: () => api.get<{ mode: 'approval' | 'open' | 'closed' }>('/api/auth/signup') });
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -53,6 +55,7 @@ export function LoginPage() {
   if (setup.isLoading || bio === null) return <Spinner />;
   if (setup.data?.needsSetup) return <SetupPage onDone={signedIn} />;
   if (recovering) return <RecoverPage initialEmail={email} onDone={signedIn} onCancel={() => setRecovering(false)} />;
+  if (signingUp) return <SignupPage mode={signupMode.data?.mode ?? 'approval'} onDone={signedIn} onCancel={() => setSigningUp(false)} />;
 
   const passwordForm = !bio || showPassword;
 
@@ -141,7 +144,100 @@ export function LoginPage() {
             Use email &amp; password instead
           </button>
         )}
+
+        <div className="hr" />
+        {signupMode.data?.mode === 'closed' ? (
+          <div className="tiny muted center">New to the team? Ask an owner to add you under More → Team.</div>
+        ) : (
+          <button type="button" className="btn block" onClick={() => setSigningUp(true)}>
+            New here? Create an account
+          </button>
+        )}
       </div>
+    </div>
+  );
+}
+
+/**
+ * Create your own account. Depending on the owners' setting you're in straight away,
+ * or an owner approves you first.
+ */
+function SignupPage({ mode, onDone, onCancel }: { mode: 'approval' | 'open' | 'closed'; onDone: () => void; onCancel: () => void }) {
+  const [f, setF] = useState({ displayName: '', email: '', phone: '', password: '' });
+  const [waiting, setWaiting] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const field = (k: keyof typeof f, label: string, props: Record<string, unknown> = {}) => (
+    <label className="field">
+      {label}
+      <input className="input" value={f[k]} onChange={(e) => setF({ ...f, [k]: e.target.value })} required {...props} />
+    </label>
+  );
+
+  if (waiting) {
+    return (
+      <div className="login-wrap">
+        <div className="card stack center" style={{ width: '100%', maxWidth: 380, padding: 24 }}>
+          <div className="brand">Slay</div>
+          <h1>Almost there</h1>
+          <div>{waiting}</div>
+          <div className="small muted">
+            Your account: <strong>{f.email.trim().toLowerCase()}</strong>
+          </div>
+          <button type="button" className="btn primary block" onClick={onCancel}>
+            Back to sign in
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="login-wrap">
+      <form
+        className="card stack"
+        style={{ width: '100%', maxWidth: 380, padding: 24 }}
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setBusy(true);
+          setError('');
+          try {
+            const r = await api.post<{ pending?: boolean; message?: string }>('/api/auth/signup', f);
+            if (r.pending) setWaiting(r.message ?? 'An owner needs to approve your account.');
+            else {
+              markPasswordLogin();
+              onDone();
+            }
+          } catch (err) {
+            setError((err as Error).message);
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <div>
+          <h1>Create your account</h1>
+          <div className="small muted" style={{ marginTop: 4 }}>
+            {mode === 'open' ? 'You can start using Slay as soon as you sign up.' : 'An owner approves new accounts. You can sign in as soon as they do.'}
+            {IS_DEMO && ' (Demo preview: in the real app, owners choose whether new accounts need their approval.)'}
+          </div>
+        </div>
+        {field('displayName', 'Your name', { autoComplete: 'name' })}
+        {field('email', 'Email – you sign in with this', { type: 'email', inputMode: 'email', autoCapitalize: 'none', autoComplete: 'email', spellCheck: false })}
+        {field('phone', 'Mobile number – for account recovery codes', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX' })}
+        {field('password', 'Password (at least 8 characters)', { type: 'password', minLength: 8, autoComplete: 'new-password' })}
+        {error && (
+          <div className="alert-banner" role="alert">
+            {error}
+          </div>
+        )}
+        <button className="btn primary block" disabled={busy}>
+          {busy ? 'Creating…' : 'Create account'}
+        </button>
+        <button type="button" className="btn ghost block" onClick={onCancel}>
+          I already have an account
+        </button>
+      </form>
     </div>
   );
 }

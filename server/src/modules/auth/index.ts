@@ -6,7 +6,7 @@ import { service } from '../../core/context.js';
 import { clientIp, HttpError, idParam, parse } from '../../core/http.js';
 import { PasskeyService } from './passkeys.js';
 import { RecoveryService } from './recovery.js';
-import { AuthService, DEVICE_COOKIE, ROLES, SESSION_COOKIE, type ClientInfo } from './service.js';
+import { AuthService, DEVICE_COOKIE, ROLES, SESSION_COOKIE, SIGNUP_MODES, type ClientInfo } from './service.js';
 
 /** Attaches req.user when a valid session cookie is present. */
 export function sessionMiddleware(ctx: AppContext): RequestHandler {
@@ -83,6 +83,20 @@ export const authModule: AppModule = {
       signIn(res, await auth().login({ email: (body.email ?? body.username)!, password: body.password, ...client(req, res) }));
     });
 
+    // ── Create your own account from the sign-in screen (owners decide who may) ──
+    r.get('/signup', (_req, res) => res.json({ mode: auth().userCount() === 0 ? 'closed' : auth().signupMode }));
+    r.post('/signup', (req, res) => {
+      const b = parse(z.object({ email: zEmail, displayName: z.string().trim().min(1, 'enter your name').max(80), phone: zPhone, password: zPassword }), req.body);
+      const c = client(req, res);
+      const result = auth().signup(b, c);
+      if (result.pending) {
+        res.status(202).json({ pending: true, message: 'Thanks! An owner needs to approve your account. You can sign in as soon as they do.' });
+        return;
+      }
+      res.status(201);
+      signIn(res, auth().startSession(result.user, c, 'password'));
+    });
+
     // ── "Forgot password?": a 6-digit code by SMS to the account's phone ──
     r.post('/recover', async (req, res) => {
       const b = parse(z.object({ email: zEmail }), req.body);
@@ -112,7 +126,7 @@ export const authModule: AppModule = {
     });
 
     r.get('/me', requireAuth, (req, res) => {
-      const team = ctx.db.prepare('SELECT id, COALESCE(email, username) AS email, display_name AS displayName, role FROM users WHERE active = 1 ORDER BY id').all();
+      const team = ctx.db.prepare('SELECT id, COALESCE(email, username) AS email, display_name AS displayName, role FROM users WHERE active = 1 AND pending = 0 ORDER BY id').all();
       res.json({ user: auth().profile(req.user!.id), team, smsReady: auth().smsReady });
     });
 
@@ -141,6 +155,20 @@ export const authModule: AppModule = {
 
     // ── Team: everyone can see it; owners add members, reset passwords, switch accounts off ──
     r.get('/team', requireAuth, (_req, res) => res.json({ team: auth().team() }));
+    r.get('/team/signup-mode', requireAuth, (_req, res) => res.json({ mode: auth().signupMode }));
+    r.put('/team/signup-mode', requireAuth, requireOwner, (req, res) => {
+      const b = parse(z.object({ mode: z.enum(SIGNUP_MODES) }), req.body);
+      auth().setSignupMode(req.user!, b.mode);
+      res.json({ mode: auth().signupMode });
+    });
+    r.post('/team/:id/approve', requireAuth, requireOwner, (req, res) => {
+      auth().approve(req.user!, idParam(req));
+      res.json({ ok: true });
+    });
+    r.post('/team/:id/decline', requireAuth, requireOwner, (req, res) => {
+      auth().decline(req.user!, idParam(req));
+      res.json({ ok: true });
+    });
     r.post('/team', requireAuth, requireOwner, (req, res) => {
       const b = parse(
         z.object({ email: zEmail, displayName: z.string().trim().min(1).max(80), password: zPassword, phone: zPhone.optional().or(z.literal('')), role: z.enum(ROLES).default('member') }),
