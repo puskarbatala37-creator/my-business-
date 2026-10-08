@@ -18,7 +18,7 @@ describe('eSewa', () => {
     const s = setup();
     const teza = w(await login(s.app, 'teza', 'password-teza'));
     const cat = await seedCatalog(teza);
-    const order = (await teza.post('/api/orders', { customer: { name: 'Ram', phone: '9812345678' }, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3500 }], payment: { status: 'partial', amount: 500, method: 'cash' } })).body;
+    const order = (await teza.post('/api/orders', { platform: 'instagram', customer: { name: 'Ram', phone: '9812345678' }, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3500 }], payment: { status: 'partial', amount: 500, method: 'cash' } })).body;
 
     const link = (await teza.post('/api/payments/requests', { order_id: order.id })).body;
     expect(link.amount).toBe(3000);
@@ -62,7 +62,7 @@ describe('eSewa', () => {
     const s = setup();
     const teza = w(await login(s.app, 'teza', 'password-teza'));
     const cat = await seedCatalog(teza);
-    const order = (await teza.post('/api/orders', { customer: { name: 'Hari' }, items: [{ variant_id: cat.red, quantity: 1, unit_price: 1000 }] })).body;
+    const order = (await teza.post('/api/orders', { platform: 'instagram', customer: { name: 'Hari' }, items: [{ variant_id: cat.red, quantity: 1, unit_price: 1000 }] })).body;
     await teza.post('/api/payments/requests', { order_id: order.id });
     const payments = service<OnlinePaymentService>(s.ctx, 'onlinePayments');
     payments.register(new EsewaProvider(s.config.esewa, (async () => new Response(JSON.stringify({ status: 'COMPLETE', total_amount: 1000, ref_id: 'X1' }))) as any));

@@ -62,7 +62,8 @@ export interface OrderSummary {
   id: number;
   invoice_no: string;
   order_date: string;
-  platform: Platform;
+  /** One of PLATFORMS; older orders may hold a legacy value such as "walk-in". */
+  platform: Platform | string;
   state: OrderState;
   fulfillment_status: FulfillmentStatus;
   payment_status: PaymentStatus;
@@ -85,6 +86,14 @@ export interface OrderSummary {
   item_count?: number;
   thumb?: string | null;
   items_summary?: string;
+  /** Product types (categories) in the order, comma separated. */
+  categories?: string | null;
+}
+
+export interface OrderSearchResult {
+  orders: OrderSummary[];
+  summary: { count: number; total: number; paid: number };
+  has_more: boolean;
 }
 
 export interface OrderItem {
@@ -120,6 +129,7 @@ export interface HistoryRow {
   payment_status: PaymentStatus;
   fulfillment_status: FulfillmentStatus;
   state: OrderState;
+  platform: string;
   items_summary: string | null;
 }
 
@@ -167,6 +177,7 @@ export interface OrderDraft {
   transcript: string;
   items: DraftItem[];
   customer: { name?: string; phone?: string; address?: string };
+  platform?: Platform;
   payment: { status?: PaymentStatus; amount?: number; method?: PaymentMethod };
   delivery_due_date?: string;
   prep_time_days?: number;

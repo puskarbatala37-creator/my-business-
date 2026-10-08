@@ -125,3 +125,21 @@ describe('COD phrases that contain the word "paid"', () => {
     expect(parseOrderSpeech('black kurta 1800, paid 1000, rest cash on delivery', catalog, TODAY).payment).toMatchObject({ status: 'partial', amount: 1000 });
   });
 });
+
+describe('order source (platform) by voice', () => {
+  it.each([
+    ['कालो कुर्था इन्स्टाग्रामबाट अर्डर', 'instagram'],
+    ['black kurta from tiktok', 'tiktok'],
+    ['व्हाट्सएपमा आएको अर्डर कालो कुर्था', 'whatsapp'],
+    ['facebook messenger order, black kurta', 'facebook'],
+  ])('%s → %s', (text, platform) => {
+    const d = parseOrderSpeech(text, catalog, TODAY);
+    expect(d.platform).toBe(platform);
+    expect(d.items[0].variant_id).toBe(5);
+  });
+  it('a platform word is not taken as part of the customer name', () => {
+    const d = parseOrderSpeech('नाम सीता शर्मा whatsapp बाट, कालो कुर्था', catalog, TODAY);
+    expect(d.customer.name).toBe('सीता शर्मा');
+    expect(d.platform).toBe('whatsapp');
+  });
+});

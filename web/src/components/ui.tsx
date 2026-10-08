@@ -1,4 +1,4 @@
-import { PAYMENT_STATUS_LABELS, type FulfillmentStatus, type OrderState, type PaymentStatus } from '@slay/shared';
+import { PAYMENT_STATUS_LABELS, platformLabel, type FulfillmentStatus, type OrderState, type PaymentStatus } from '@slay/shared';
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { uploadPhoto } from '../lib/image';
@@ -87,6 +87,16 @@ export function PaymentBadge({ status, balance }: { status: PaymentStatus; balan
 export function FulfillmentBadge({ status, state }: { status: FulfillmentStatus; state?: OrderState }) {
   if (state && state !== 'active') return <span className="badge neutral">{state[0].toUpperCase() + state.slice(1)}</span>;
   return status === 'sent' ? <span className="badge info">Sent</span> : <span className="badge neutral">Pending</span>;
+}
+
+/** Where the order came from. The coloured dot is the platform's brand colour; the name is always written out. */
+export function PlatformBadge({ platform }: { platform: string | null | undefined }) {
+  return (
+    <span className={`badge platform platform-${platform ?? 'unknown'}`}>
+      <span className="platform-dot" aria-hidden="true" />
+      {platformLabel(platform)}
+    </span>
+  );
 }
 
 export function StockBadge({ stock }: { stock: number }) {

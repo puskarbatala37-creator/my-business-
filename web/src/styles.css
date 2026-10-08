@@ -195,6 +195,19 @@ textarea.input { min-height: 80px; resize: vertical; }
 .badge.info { background: var(--info-soft); color: var(--info); }
 .badge.neutral { background: var(--surface-2); color: var(--text-2); }
 
+/* Platform badges: neutral pill + brand-coloured dot, label always written out */
+.badge.platform { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+.platform-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.platform-tiktok .platform-dot { background: #fe2c55; box-shadow: -2px 0 0 #25f4ee; }
+.platform-facebook .platform-dot { background: #1877f2; }
+.platform-instagram .platform-dot { background: linear-gradient(45deg, #f58529, #dd2a7b 55%, #8134af); }
+.platform-whatsapp .platform-dot { background: #25d366; }
+.platform-picker { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.platform-picker .chip { min-width: 0; min-height: 46px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; }
+/* Phones: a 2×2 grid of big, easy targets. */
+@media (max-width: 520px) { .platform-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.chip .platform-dot { display: inline-block; margin-right: 6px; vertical-align: 1px; }
+
 /* ── Stats ── */
 .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
 .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px; }

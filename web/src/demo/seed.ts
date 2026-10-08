@@ -108,17 +108,17 @@ export async function seedDemo(ctx: AppContext) {
 
   const today = todayInBusinessTz();
   type Line = [string, number, number, string?];
-  const sample: { daysAgo: number; c: number; items: Line[]; pay: 'paid' | 'partial' | 'unpaid'; amount?: number; method?: 'esewa' | 'cash' | 'khalti' | 'bank'; sent?: string; platform: 'instagram' | 'facebook' | 'tiktok'; by: AuthUser; notes?: string; due?: number }[] = [
+  const sample: { daysAgo: number; c: number; items: Line[]; pay: 'paid' | 'partial' | 'unpaid'; amount?: number; method?: 'esewa' | 'cash' | 'khalti' | 'bank'; sent?: string; platform: 'instagram' | 'facebook' | 'tiktok' | 'whatsapp'; by: AuthUser; notes?: string; due?: number }[] = [
     { daysAgo: 160, c: 0, items: [['Banarasi Silk/Red', 1, 3500]], pay: 'paid', method: 'esewa', sent: 'NCM-10021', platform: 'instagram', by: teza },
     { daysAgo: 130, c: 1, items: [['Kurta Set/Black', 2, 1800, 'M']], pay: 'paid', method: 'khalti', sent: 'NCM-10388', platform: 'facebook', by: partner },
-    { daysAgo: 100, c: 2, items: [['Cotton Daily/Pink', 2, 1400]], pay: 'paid', method: 'cash', sent: 'NCM-10790', platform: 'tiktok', by: teza },
+    { daysAgo: 100, c: 2, items: [['Cotton Daily/Pink', 2, 1400]], pay: 'paid', method: 'cash', sent: 'NCM-10790', platform: 'whatsapp', by: teza },
     { daysAgo: 95, c: 3, items: [['Bridal Lehenga/Rani Pink', 1, 18500, 'M']], pay: 'paid', method: 'bank', sent: 'NCM-10811', platform: 'instagram', by: teza, notes: 'Blouse stitching to measurements' },
     { daysAgo: 70, c: 4, items: [['Banarasi Silk/Royal Blue', 1, 3500], ['Kurta Set/Maroon', 1, 1800, 'L']], pay: 'paid', method: 'esewa', sent: 'NCM-11240', platform: 'instagram', by: partner },
     { daysAgo: 45, c: 0, items: [['Cotton Daily/Yellow', 3, 1400]], pay: 'paid', method: 'cash', sent: 'NCM-11702', platform: 'facebook', by: teza },
     { daysAgo: 30, c: 1, items: [['Banarasi Silk/Green', 1, 3500]], pay: 'paid', method: 'esewa', sent: 'NCM-11955', platform: 'tiktok', by: partner },
     { daysAgo: 12, c: 2, items: [['Kurta Set/White', 1, 1800, 'S']], pay: 'paid', method: 'khalti', sent: 'NCM-12233', platform: 'instagram', by: teza },
     { daysAgo: 6, c: 3, items: [['Banarasi Silk/Red', 1, 3500]], pay: 'partial', amount: 1000, method: 'esewa', platform: 'instagram', by: partner, due: 1, notes: 'Fall & pico please' },
-    { daysAgo: 3, c: 4, items: [['Cotton Daily/Pink', 1, 1400], ['Kurta Set/Black', 1, 1800, 'L']], pay: 'unpaid', platform: 'facebook', by: teza, due: 2 },
+    { daysAgo: 3, c: 4, items: [['Cotton Daily/Pink', 1, 1400], ['Kurta Set/Black', 1, 1800, 'L']], pay: 'unpaid', platform: 'whatsapp', by: teza, due: 2 },
     { daysAgo: 1, c: 0, items: [['Kurta Set/Maroon', 1, 1800, 'M']], pay: 'paid', method: 'esewa', sent: 'NCM-12510', platform: 'tiktok', by: teza },
     { daysAgo: 0, c: 1, items: [['Banarasi Silk/Royal Blue', 1, 3500]], pay: 'partial', amount: 1500, method: 'cash', platform: 'instagram', by: partner, due: 3 },
     { daysAgo: 0, c: 2, items: [['Cotton Daily/Pink', 2, 1400]], pay: 'unpaid', platform: 'tiktok', by: teza, due: 4 },

@@ -1,4 +1,4 @@
-import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS } from '@slay/shared';
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, platformLabel } from '@slay/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
@@ -12,6 +12,7 @@ export function invoiceText(o: OrderDetail) {
   const lines = [
     `SLAY – Invoice ${o.invoice_no}`,
     `Date: ${longDate(o.order_date)}`,
+    `Ordered via: ${platformLabel(o.platform)}`,
     `Customer: ${o.customer.name}${o.customer.phone ? ' (' + o.customer.phone + ')' : ''}`,
     '',
     ...o.items.map((i) => `• ${i.product_name} – ${i.color}${i.size ? ', size ' + i.size : ''}: ${i.quantity} × ${npr(i.unit_price)} = ${npr(i.quantity * i.unit_price)}`),
@@ -60,6 +61,7 @@ export function InvoicePage() {
             <div className="right small">
               <div className="strong">Invoice {o.invoice_no}</div>
               <div>{longDate(o.order_date)}</div>
+              <div>Ordered via {platformLabel(o.platform)}</div>
             </div>
           </div>
           <div className="hr" />

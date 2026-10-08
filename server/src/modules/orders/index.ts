@@ -19,7 +19,8 @@ const zItem = z.object({
 const zOrder = z.object({
   customer: zCustomer,
   order_date: zDate.optional(),
-  platform: z.enum(PLATFORMS).optional(),
+  // Required: every order records where it came from.
+  platform: z.enum(PLATFORMS, { message: 'choose where the order came from (TikTok, Facebook, Instagram or WhatsApp)' }),
   payment_method: z.enum(PAYMENT_METHODS).nullable().optional(),
   delivery_charge: zMoney.optional(),
   discount: zMoney.optional(),
@@ -43,7 +44,10 @@ export const ordersModule: AppModule = {
     r.get('/', (req, res) => {
       const q = parse(
         z.object({
-          q: z.string().optional(),
+          q: z.string().max(200).optional(),
+          customer: z.string().max(200).optional(),
+          category: z.string().max(80).optional(),
+          platform: z.enum(PLATFORMS).optional(),
           fulfillment: z.enum(FULFILLMENT_STATUSES).optional(),
           payment: z.enum([...PAYMENT_STATUSES, 'open']).optional(),
           state: z.string().optional().default('active'),
@@ -55,7 +59,7 @@ export const ordersModule: AppModule = {
         }),
         req.query,
       );
-      res.json({ orders: orders().list(q) });
+      res.json(orders().list(q));
     });
 
     r.get('/:id', (req, res) => res.json(orders().get(idParam(req))));

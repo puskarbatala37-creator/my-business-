@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
-import { Empty, FulfillmentBadge, PaymentBadge, Sheet, Spinner, TopBar, useToast } from '../../components/ui';
+import { Empty, FulfillmentBadge, PaymentBadge, PlatformBadge, Sheet, Spinner, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { npr, shortDate } from '../../lib/format';
 import type { Customer, HistoryRow } from '../../lib/types';
@@ -112,7 +112,8 @@ export function CustomerPage() {
                   <span className="num strong">{npr(o.total)}</span>
                 </div>
                 <div className="small muted ellipsis">{o.items_summary}</div>
-                <div className="row" style={{ gap: 6, marginTop: 4 }}>
+                <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
+                  <PlatformBadge platform={o.platform} />
                   <PaymentBadge status={o.payment_status} balance={o.total - o.amount_paid} />
                   <FulfillmentBadge status={o.fulfillment_status} state={o.state} />
                 </div>

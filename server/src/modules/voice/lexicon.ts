@@ -114,3 +114,11 @@ export const ADDRESS_WORDS = ['ठेगाना', 'address', 'घर', 'thegan
  * "2000 tiryo" = paid 2000.
  */
 export const VERB_LAST_LATIN = new Set(['tiryo', 'tiriskyo', 'tiresakyo', 'tireko', 'baki', 'baaki', 'aayo', 'bhayo', 'baina', 'adhi', 'aadha']);
+
+/** Where the order came from ("इन्स्टाग्रामबाट", "from TikTok", "whatsapp ma"). */
+export const PLATFORM_WORDS: Record<string, string[]> = {
+  tiktok: ['tiktok', 'tik tok', 'टिकटक', 'टिक टक', 'टिकटोक'],
+  facebook: ['facebook', 'fb', 'messenger', 'फेसबुक', 'फेसबूक', 'मेसेन्जर'],
+  instagram: ['instagram', 'insta', 'ig', 'इन्स्टाग्राम', 'इन्स्टा', 'इन्स्टाग्राम'],
+  whatsapp: ['whatsapp', 'whats app', 'व्हाट्सएप', 'व्हाट्सअप', 'ह्वाट्सएप', 'वाट्सएप', 'वाट्सअप'],
+};

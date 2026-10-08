@@ -56,7 +56,7 @@ export class CustomerService {
   history(customerId: number, limit = 100) {
     return this.ctx.db
       .prepare(
-        `SELECT o.id, o.invoice_no, o.order_date, o.total, o.amount_paid, o.payment_status, o.fulfillment_status, o.state,
+        `SELECT o.id, o.invoice_no, o.order_date, o.total, o.amount_paid, o.payment_status, o.fulfillment_status, o.state, o.platform,
                 (SELECT GROUP_CONCAT(i.product_name || ' (' || i.color || ') ×' || i.quantity, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_summary
            FROM orders o WHERE o.customer_id = ? ORDER BY o.order_date DESC, o.id DESC LIMIT ?`,
       )

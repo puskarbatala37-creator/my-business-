@@ -33,16 +33,21 @@ export type FulfillmentStatus = (typeof FULFILLMENT_STATUSES)[number];
 export const ORDER_STATES = ['active', 'cancelled', 'returned', 'exchanged'] as const;
 export type OrderState = (typeof ORDER_STATES)[number];
 
-export const PLATFORMS = ['instagram', 'facebook', 'tiktok', 'walk-in', 'other'] as const;
+/** Where an order came from. Every order records one of these. */
+export const PLATFORMS = ['tiktok', 'facebook', 'instagram', 'whatsapp'] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
-export const PLATFORM_LABELS: Record<Platform, string> = {
-  instagram: 'Instagram',
-  facebook: 'Facebook',
+/** Labels for every platform value an order can hold, including ones no longer offered for new orders. */
+export const PLATFORM_LABELS: Record<string, string> = {
   tiktok: 'TikTok',
-  'walk-in': 'Walk-in',
-  other: 'Other',
+  facebook: 'Facebook',
+  instagram: 'Instagram',
+  whatsapp: 'WhatsApp',
+  'walk-in': 'Walk-in', // older orders only
+  other: 'Other', // older orders only
 };
+
+export const platformLabel = (p: string | null | undefined) => (p ? (PLATFORM_LABELS[p] ?? p) : 'Unknown');
 
 /** Why a stock count changed. `return` / `exchange` are reserved for later. */
 export const STOCK_REASONS = ['order', 'order_edit', 'order_cancel', 'manual', 'restock', 'return', 'exchange'] as const;

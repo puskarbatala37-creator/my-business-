@@ -1,4 +1,4 @@
-import { addDays, money, type PaymentMethod, type PaymentStatus } from '@slay/shared';
+import { addDays, money, type PaymentMethod, type PaymentStatus, type Platform } from '@slay/shared';
 import * as L from './lexicon.js';
 import { COUNTER_WORDS, normalizeNumbers } from './numbers.js';
 
@@ -33,6 +33,7 @@ export interface OrderDraft {
   normalized: string;
   items: DraftItem[];
   customer: { name?: string; phone?: string; address?: string };
+  platform?: Platform;
   payment: { status?: PaymentStatus; amount?: number; method?: PaymentMethod };
   delivery_due_date?: string;
   prep_time_days?: number;
@@ -213,6 +214,16 @@ export function parseOrderSpeech(transcript: string, catalog: VoiceCatalogVarian
     }
   });
 
+  // ── Platform the order came from ──
+  for (const [platform, words] of Object.entries(L.PLATFORM_WORDS)) {
+    const hit = findAny(tokens, words);
+    if (hit) {
+      draft.platform = platform as Platform;
+      for (let k = hit.index; k < hit.index + hit.length; k++) used.add(k);
+      break;
+    }
+  }
+
   // ── Customer name / address ("नाम सीता शर्मा", "address Baneshwor") ──
   const stop = new Set([...L.SEPARATORS, ...L.ADDRESS_WORDS, ...L.NAME_WORDS, 'फोन', 'phone', 'नम्बर', 'number', 'हो', 'is']);
   const grab = (keywords: string[], max: number) => {
@@ -222,7 +233,7 @@ export function parseOrderSpeech(transcript: string, catalog: VoiceCatalogVarian
     // "customer name is Sita" – skip the remaining keyword / filler words
     while (i < tokens.length && (keywords.includes(tokens[i]) || ['is', 'हो', 'को', ':'].includes(tokens[i]))) i++;
     const words: string[] = [];
-    while (i < tokens.length && words.length < max && !stop.has(tokens[i]) && !isNum(tokens[i])) {
+    while (i < tokens.length && words.length < max && !stop.has(tokens[i]) && !isNum(tokens[i]) && !used.has(i)) {
       used.add(i);
       words.push(tokens[i++]);
     }

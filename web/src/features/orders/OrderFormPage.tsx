@@ -2,7 +2,7 @@ import {
   money,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHODS,
-  PLATFORM_LABELS,
+  platformLabel,
   PLATFORMS,
   todayInBusinessTz,
   type PaymentMethod,
@@ -36,7 +36,8 @@ interface Line {
 
 interface FormState {
   customer: { id?: number | null; name: string; phone: string; address: string; social_handle: string };
-  platform: Platform;
+  /** Required – '' until someone picks where the order came from. */
+  platform: Platform | '';
   order_date: string;
   items: Line[];
   delivery_charge: number | '';
@@ -52,13 +53,9 @@ interface FormState {
 const newKey = () => Math.random().toString(36).slice(2);
 
 function emptyForm(): FormState {
-  let platform: Platform = 'instagram';
-  try {
-    platform = (localStorage.getItem('slay.lastPlatform') as Platform) || 'instagram';
-  } catch {}
   return {
     customer: { name: '', phone: '', address: '', social_handle: '' },
-    platform,
+    platform: '',
     order_date: todayInBusinessTz(),
     items: [],
     delivery_charge: '',
@@ -74,7 +71,8 @@ function emptyForm(): FormState {
 function fromOrder(o: OrderDetail): FormState {
   return {
     customer: { id: o.customer.id, name: o.customer.name, phone: o.customer.phone ?? '', address: o.customer.address, social_handle: o.customer.social_handle },
-    platform: o.platform,
+    // Older orders may hold a source that is no longer offered – ask again when editing.
+    platform: (PLATFORMS as readonly string[]).includes(o.platform) ? (o.platform as Platform) : '',
     order_date: o.order_date,
     items: o.items.map((i) => ({ key: newKey(), id: i.id, variant_id: i.variant_id, size: i.size, quantity: i.quantity, unit_price: i.unit_price, photo: i.photo, reserved: i.quantity })),
     delivery_charge: o.delivery_charge || '',
@@ -189,6 +187,7 @@ export function OrderFormPage() {
             }),
           ];
         }
+        if (d.platform) next.platform = d.platform;
         if (d.payment.status) next.payment.status = d.payment.status;
         if (d.payment.amount !== undefined) next.payment.amount = d.payment.amount;
         if (d.payment.method) next.payment.method = d.payment.method;
@@ -207,6 +206,10 @@ export function OrderFormPage() {
   }
 
   async function save() {
+    if (!form.platform) {
+      document.getElementById('order-source')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return toast('Choose where the order came from: TikTok, Facebook, Instagram or WhatsApp', true);
+    }
     if (!form.customer.name.trim()) return toast('Add the customer name', true);
     if (!form.items.length) return toast('Add at least one item', true);
     if (form.items.some((l) => !l.variant_id)) return toast('Choose the colour for every item', true);
@@ -230,9 +233,6 @@ export function OrderFormPage() {
       const saved = editing
         ? await api.put<OrderDetail>(`/api/orders/${id}`, { ...body, version: form.version })
         : await api.post<OrderDetail>('/api/orders', { ...body, payment: { status: form.payment.status, amount: paidNow, method: form.payment.method } });
-      try {
-        localStorage.setItem('slay.lastPlatform', form.platform);
-      } catch {}
       qc.invalidateQueries({ queryKey: ['orders'] });
       qc.invalidateQueries({ queryKey: ['catalog'] });
       qc.setQueryData(['order', saved.id], saved);
@@ -279,6 +279,29 @@ export function OrderFormPage() {
           </div>
         )}
 
+        {/* Where the order came from – required */}
+        <section className="card stack" id="order-source" aria-labelledby="order-source-title">
+          <div className="row between">
+            <h2 id="order-source-title">Order came from</h2>
+            {!form.platform && <span className="badge warn">Required</span>}
+          </div>
+          <div className="platform-picker" role="radiogroup" aria-labelledby="order-source-title">
+            {PLATFORMS.map((p) => (
+              <button
+                type="button"
+                key={p}
+                role="radio"
+                aria-checked={form.platform === p}
+                className={`chip platform-${p} ${form.platform === p ? 'on' : ''}`}
+                onClick={() => set('platform', p)}
+              >
+                <span className="platform-dot" aria-hidden="true" />
+                {platformLabel(p)}
+              </button>
+            ))}
+          </div>
+        </section>
+
         {/* Customer */}
         <section className="card stack">
           <h2>Customer</h2>
@@ -315,19 +338,9 @@ export function OrderFormPage() {
             <input className="input" autoComplete="off" value={form.customer.address} onChange={(e) => setCustomer({ address: e.target.value })} />
           </label>
           <label className="field">
-            Instagram / Facebook / TikTok name
+            Social media name (TikTok, Facebook, Instagram or WhatsApp)
             <input className="input" autoCapitalize="none" autoComplete="off" value={form.customer.social_handle} onChange={(e) => setCustomer({ social_handle: e.target.value })} />
           </label>
-          <div className="field">
-            <span className="small muted">Order came from</span>
-            <div className="chips">
-              {PLATFORMS.map((p) => (
-                <button type="button" key={p} className={`chip ${form.platform === p ? 'on' : ''}`} onClick={() => set('platform', p)}>
-                  {PLATFORM_LABELS[p]}
-                </button>
-              ))}
-            </div>
-          </div>
         </section>
 
         {/* Items */}

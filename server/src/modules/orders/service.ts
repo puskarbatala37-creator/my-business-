@@ -28,7 +28,7 @@ export interface OrderItemInput {
 export interface OrderInput {
   customer: CustomerInput;
   order_date?: string;
-  platform?: Platform;
+  platform: Platform;
   payment_method?: PaymentMethod | null;
   delivery_charge?: number;
   discount?: number;
@@ -47,6 +47,11 @@ export interface OrderCreateInput extends OrderInput {
 
 export interface OrderListFilters {
   q?: string;
+  /** Customer name only. */
+  customer?: string;
+  /** Product type, i.e. category name (e.g. "Sari"). */
+  category?: string;
+  platform?: Platform;
   fulfillment?: FulfillmentStatus;
   payment?: PaymentStatus | 'open';
   state?: string;
@@ -73,14 +78,28 @@ export class OrderService {
     return service<AlertService>(this.ctx, 'alerts');
   }
 
+  /**
+   * Order / transaction history search. Every filter is optional and they combine:
+   * text (customer name, phone, social handle, invoice no., tracking no., product, colour or product type),
+   * order date range, product type, platform, payment and fulfilment status.
+   */
   list(f: OrderListFilters) {
     const where: string[] = [];
     const args: unknown[] = [];
-    if (f.q?.trim()) {
-      const like = `%${f.q.trim()}%`;
-      where.push('(o.invoice_no LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR c.social_handle LIKE ? OR o.tracking_number LIKE ?)');
-      args.push(like, like, like, like, like);
+    const q = f.q?.trim();
+    if (q) {
+      const like = `%${q}%`;
+      where.push(`(o.invoice_no LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR c.social_handle LIKE ? OR o.tracking_number LIKE ?
+                   OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id
+                              AND (i.product_name LIKE ? OR i.color LIKE ? OR i.category_name LIKE ?)))`);
+      args.push(like, like, like, like, like, like, like, like);
     }
+    if (f.customer?.trim()) (where.push('c.name LIKE ?'), args.push(`%${f.customer.trim()}%`));
+    if (f.category?.trim()) {
+      where.push('EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.category_name = ? COLLATE NOCASE)');
+      args.push(f.category.trim());
+    }
+    if (f.platform) (where.push('o.platform = ?'), args.push(f.platform));
     if (f.fulfillment) (where.push('o.fulfillment_status = ?'), args.push(f.fulfillment));
     if (f.payment === 'open') where.push(`o.payment_status <> 'paid'`);
     else if (f.payment) (where.push('o.payment_status = ?'), args.push(f.payment));
@@ -88,16 +107,32 @@ export class OrderService {
     if (f.from) (where.push('o.order_date >= ?'), args.push(f.from));
     if (f.to) (where.push('o.order_date <= ?'), args.push(f.to));
     if (f.customer_id) (where.push('o.customer_id = ?'), args.push(f.customer_id));
-    const sql = `
-      SELECT o.*, c.name AS customer_name, c.phone AS customer_phone,
-             (SELECT SUM(quantity) FROM order_items i WHERE i.order_id = o.id) AS item_count,
-             (SELECT photo FROM order_items i WHERE i.order_id = o.id AND photo IS NOT NULL ORDER BY i.id LIMIT 1) AS thumb,
-             (SELECT GROUP_CONCAT(i.product_name || ' · ' || i.color, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_summary
-        FROM orders o JOIN customers c ON c.id = o.customer_id
-       ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
-       ORDER BY o.order_date DESC, o.id DESC
-       LIMIT ? OFFSET ?`;
-    return (this.db.prepare(sql).all(...args, Math.min(f.limit ?? 50, 200), f.offset ?? 0) as any[]).map(withBalance);
+    const from = `FROM orders o JOIN customers c ON c.id = o.customer_id ${where.length ? 'WHERE ' + where.join(' AND ') : ''}`;
+
+    const limit = Math.min(f.limit ?? 50, 200);
+    const offset = f.offset ?? 0;
+    const rows = this.db
+      .prepare(
+        `SELECT o.*, c.name AS customer_name, c.phone AS customer_phone,
+                (SELECT SUM(quantity) FROM order_items i WHERE i.order_id = o.id) AS item_count,
+                (SELECT photo FROM order_items i WHERE i.order_id = o.id AND photo IS NOT NULL ORDER BY i.id LIMIT 1) AS thumb,
+                (SELECT GROUP_CONCAT(i.product_name || ' · ' || i.color, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_summary,
+                (SELECT GROUP_CONCAT(DISTINCT i.category_name) FROM order_items i WHERE i.order_id = o.id AND i.category_name <> '') AS categories
+         ${from}
+         ORDER BY o.order_date DESC, o.id DESC
+         LIMIT ? OFFSET ?`,
+      )
+      .all(...args, limit, offset) as any[];
+    const totals = this.db.prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(o.total), 0) AS total, COALESCE(SUM(o.amount_paid), 0) AS paid ${from}`).get(...args) as {
+      n: number;
+      total: number;
+      paid: number;
+    };
+    return {
+      orders: rows.map(withBalance),
+      summary: { count: totals.n, total: money(totals.total), paid: money(totals.paid) },
+      has_more: offset + rows.length < totals.n,
+    };
   }
 
   get(id: number) {
@@ -139,7 +174,7 @@ export class OrderService {
           invoiceNo,
           customerId,
           orderDate,
-          input.platform ?? 'instagram',
+          input.platform,
           input.payment?.method ?? input.payment_method ?? null,
           money(input.delivery_charge ?? 0),
           money(input.discount ?? 0),
@@ -235,7 +270,7 @@ export class OrderService {
         .run(
           customerId,
           input.order_date || current.order_date,
-          input.platform ?? current.platform,
+          input.platform,
           input.payment_method !== undefined ? input.payment_method : current.payment_method,
           money(input.delivery_charge ?? current.delivery_charge),
           money(input.discount ?? current.discount),
@@ -335,10 +370,10 @@ export class OrderService {
     const v = this.catalog.getVariant(item.variant_id);
     const row = this.db
       .prepare(
-        `INSERT INTO order_items (order_id, variant_id, product_name, color, size, quantity, unit_price, unit_cost, photo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        `INSERT INTO order_items (order_id, variant_id, product_name, category_name, color, size, quantity, unit_price, unit_cost, photo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       )
-      .get(orderId, v.id, v.product_name, v.color, item.size ?? '', item.quantity, money(item.unit_price), v.cost, item.photo || v.photo) as { id: number };
+      .get(orderId, v.id, v.product_name, v.category_name, v.color, item.size ?? '', item.quantity, money(item.unit_price), v.cost, item.photo || v.photo) as { id: number };
     this.catalog.take(v.id, item.quantity, 'order', userId, orderId, row.id);
     return v.id;
   }

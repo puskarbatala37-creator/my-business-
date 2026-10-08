@@ -22,7 +22,7 @@ describe('team accounts', () => {
 
     // Members do the daily work…
     const cat = await seedCatalog(sita);
-    const order = await sita.post('/api/orders', { customer: { name: 'Gita' }, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3500 }] });
+    const order = await sita.post('/api/orders', { platform: 'instagram', customer: { name: 'Gita' }, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3500 }] });
     expect(order.status).toBe(201);
     // …but cannot manage the team.
     expect((await sita.post('/api/auth/team', { username: 'x1', displayName: 'X', password: 'xxxxxxxx' })).status).toBe(403);

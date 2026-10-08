@@ -1,9 +1,9 @@
-import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS, PLATFORM_LABELS, todayInBusinessTz, type PaymentMethod } from '@slay/shared';
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS, todayInBusinessTz, type PaymentMethod } from '@slay/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
-import { FulfillmentBadge, MoneyInput, PaymentBadge, Sheet, Spinner, Thumb, TopBar, useToast } from '../../components/ui';
+import { FulfillmentBadge, MoneyInput, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { dateTime, longDate, npr, relativeDue, shortDate } from '../../lib/format';
 import type { OrderDetail } from '../../lib/types';
@@ -86,14 +86,13 @@ export function OrderDetailPage() {
         <section className="card stack">
           <div className="row between">
             <div>
-              <div className="muted small">
-                {longDate(o.order_date)} · {PLATFORM_LABELS[o.platform]}
-              </div>
+              <div className="muted small">{longDate(o.order_date)}</div>
               <div className="strong" style={{ fontSize: 24 }}>
                 {npr(o.total)}
               </div>
             </div>
             <div className="stack right" style={{ gap: 4, alignItems: 'flex-end' }}>
+              <PlatformBadge platform={o.platform} />
               <PaymentBadge status={o.payment_status} />
               <FulfillmentBadge status={o.fulfillment_status} state={o.state} />
             </div>

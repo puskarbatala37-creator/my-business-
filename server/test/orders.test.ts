@@ -43,7 +43,7 @@ describe('orders & stock', () => {
     // The partner sees the new stock immediately.
     expect(await stockOf(partner, cat.red)).toBe(1);
 
-    const second = await partner.post('/api/orders', { customer, items: [{ variant_id: cat.blue, quantity: 1, unit_price: 3500 }], payment: { status: 'paid', method: 'cash' } });
+    const second = await partner.post('/api/orders', { platform: 'instagram', customer, items: [{ variant_id: cat.blue, quantity: 1, unit_price: 3500 }], payment: { status: 'paid', method: 'cash' } });
     expect(second.body.invoice_no).toMatch(/-0002$/);
     expect(second.body.payment_status).toBe('paid');
     // Same phone → same customer, with order history.
@@ -53,9 +53,9 @@ describe('orders & stock', () => {
 
   it('prevents double-selling the last unit', async () => {
     const { teza, partner, cat } = await ready();
-    const a = await teza.post('/api/orders', { customer, items: [{ variant_id: cat.blue, quantity: 1, unit_price: 3500 }] });
+    const a = await teza.post('/api/orders', { platform: 'instagram', customer, items: [{ variant_id: cat.blue, quantity: 1, unit_price: 3500 }] });
     expect(a.status).toBe(201);
-    const b = await partner.post('/api/orders', { customer: { name: 'Gita', phone: '9800000000' }, items: [{ variant_id: cat.blue, quantity: 1, unit_price: 3500 }] });
+    const b = await partner.post('/api/orders', { platform: 'instagram', customer: { name: 'Gita', phone: '9800000000' }, items: [{ variant_id: cat.blue, quantity: 1, unit_price: 3500 }] });
     expect(b.status).toBe(409);
     expect(b.body.code).toBe('out_of_stock');
     expect(await stockOf(teza, cat.blue)).toBe(0);
@@ -66,10 +66,10 @@ describe('orders & stock', () => {
 
   it('adjusts stock when an order is edited or cancelled', async () => {
     const { teza, partner, cat } = await ready();
-    const o = (await teza.post('/api/orders', { customer, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3500 }] })).body;
+    const o = (await teza.post('/api/orders', { platform: 'instagram', customer, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3500 }] })).body;
     expect(await stockOf(teza, cat.red)).toBe(2);
     const edited = await teza.put(`/api/orders/${o.id}`, {
-      version: o.version,
+      platform: 'instagram', version: o.version,
       customer: { ...customer, id: o.customer.id },
       items: [
         { id: o.items[0].id, variant_id: cat.red, quantity: 3, unit_price: 3400 },
@@ -82,7 +82,7 @@ describe('orders & stock', () => {
     expect(edited.body.total).toBe(3 * 3400 + 3500);
 
     // Partner editing with the old version is refused instead of overwriting.
-    const stale = await partner.put(`/api/orders/${o.id}`, { version: o.version, customer, items: [{ variant_id: cat.red, quantity: 1, unit_price: 1 }] });
+    const stale = await partner.put(`/api/orders/${o.id}`, { platform: 'instagram', version: o.version, customer, items: [{ variant_id: cat.red, quantity: 1, unit_price: 1 }] });
     expect(stale.status).toBe(409);
     expect(stale.body.code).toBe('stale_version');
 
@@ -94,7 +94,7 @@ describe('orders & stock', () => {
 
   it('payments update the status, and marking sent works', async () => {
     const { teza, cat } = await ready();
-    const o = (await teza.post('/api/orders', { customer, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3000 }] })).body;
+    const o = (await teza.post('/api/orders', { platform: 'instagram', customer, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3000 }] })).body;
     expect(o.payment_status).toBe('unpaid');
     const p1 = (await teza.post(`/api/orders/${o.id}/payments`, { amount: 1000, method: 'cash' })).body;
     expect(p1.payment_status).toBe('partial');
@@ -111,8 +111,8 @@ describe('orders & stock', () => {
 
   it('dashboard totals daily / monthly / six months', async () => {
     const { teza, cat, ctx } = await ready();
-    await teza.post('/api/orders', { customer, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3000 }], payment: { status: 'paid', method: 'cash' } });
-    const old = await teza.post('/api/orders', { customer, order_date: '2020-01-01', items: [{ variant_id: cat.red, quantity: 1, unit_price: 9999 }] });
+    await teza.post('/api/orders', { platform: 'instagram', customer, items: [{ variant_id: cat.red, quantity: 1, unit_price: 3000 }], payment: { status: 'paid', method: 'cash' } });
+    const old = await teza.post('/api/orders', { platform: 'instagram', customer, order_date: '2020-01-01', items: [{ variant_id: cat.red, quantity: 1, unit_price: 9999 }] });
     expect(old.status).toBe(201);
     const d = (await teza.get('/api/dashboard')).body;
     expect(d.today.sales).toBe(3000);
