@@ -1,7 +1,7 @@
 import { LIVE_EVENTS } from '@slay/shared';
 import { useQuery } from '@tanstack/react-query';
-import { createContext, useContext, type ReactNode } from 'react';
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { NavLink, Outlet, useLocation, useNavigate, useNavigationType, type Location } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { useLiveSync } from '../lib/live';
@@ -26,10 +26,13 @@ export function Layout() {
     else if (e.message && e.actor && e.actor.id !== me?.user.id) toast(e.message);
     else if (e.type === LIVE_EVENTS.payment && e.message) toast(e.message);
   });
+  const { location, direction } = useScreenTransition();
   return (
     <LiveCtx.Provider value={connected}>
       <div className="app">
-        <Outlet />
+        <div key={location.pathname} className={`screen screen-${direction}`}>
+          <Outlet />
+        </div>
         <BiometricOffer />
         <nav className="bottom-nav no-print" aria-label="Main">
           <div className="bottom-nav-inner">
@@ -59,6 +62,45 @@ export function Layout() {
       </div>
     </LiveCtx.Provider>
   );
+}
+
+const TABS = new Set(['/', '/orders', '/stock', '/more']);
+const depth = (path: string) => path.split('/').filter(Boolean).length;
+const scrollPositions = new Map<string, number>();
+
+/**
+ * Native-style screen changes: going deeper slides in from the right, going back slides in from
+ * the left, switching tabs cross-fades. Scroll position is kept for each screen so going back
+ * lands exactly where you were; new screens start at the top.
+ */
+function useScreenTransition() {
+  const location = useLocation();
+  const type = useNavigationType();
+  const prev = useRef<Location | null>(null);
+  const direction = useRef<'none' | 'forward' | 'back' | 'fade'>('none');
+
+  if (prev.current && prev.current.pathname !== location.pathname && prev.current.key !== location.key) {
+    direction.current =
+      type === 'POP' ? 'back' : TABS.has(location.pathname) ? 'fade' : depth(location.pathname) >= depth(prev.current.pathname) ? 'forward' : 'back';
+  }
+
+  useLayoutEffect(() => {
+    if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  }, []);
+  useLayoutEffect(() => {
+    const from = prev.current;
+    prev.current = location;
+    if (!from || from.pathname === location.pathname) return;
+    window.scrollTo(0, type === 'POP' ? scrollPositions.get(location.key) ?? 0 : 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.key]);
+  useLayoutEffect(() => {
+    const save = () => scrollPositions.set(location.key, window.scrollY);
+    window.addEventListener('scroll', save, { passive: true });
+    return () => window.removeEventListener('scroll', save);
+  }, [location.key]);
+
+  return { location, direction: direction.current };
 }
 
 /** Bell with unread security alerts + live-sync indicator; used in top bars. */

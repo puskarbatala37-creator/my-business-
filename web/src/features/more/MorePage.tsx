@@ -2,6 +2,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
+import { canInstallHere, OPEN_INSTALL } from '../../components/InstallPrompt';
 import { Sheet, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
@@ -26,6 +27,16 @@ export function MorePage() {
     <>
       <TopBar title="More" />
       <main className="page stack" style={{ paddingTop: 12 }}>
+        {canInstallHere() && (
+          <button className="list-item install-row" onClick={() => window.dispatchEvent(new Event(OPEN_INSTALL))}>
+            <img src="/icons/icon-96.png" alt="" width={40} height={40} style={{ borderRadius: 10 }} />
+            <div className="grow">
+              <div className="strong">Install the Slay app</div>
+              <div className="small muted">Put Slay on your home screen – opens full screen, works with poor signal</div>
+            </div>
+            <Icon name="plus" />
+          </button>
+        )}
         <div className="list">
           {LINKS.map((l) => (
             <Link key={l.to} to={l.to} className="list-item">
@@ -88,9 +99,6 @@ export function MorePage() {
           >
             <Icon name="logout" /> <span className="strong">Sign out</span>
           </button>
-        </div>
-        <div className="tiny muted center">
-          Tip: add Slay to your Home Screen (Share → Add to Home Screen on iPhone, ⋮ → Install app on Android) so it opens like an app.
         </div>
       </main>
       {pw && <PasswordSheet onClose={() => setPw(false)} />}

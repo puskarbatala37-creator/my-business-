@@ -1,8 +1,9 @@
 # Slay – orders & stock
 
 Order and inventory management for a small clothing business that sells on Instagram, Facebook and TikTok. It is built for any size of team, not just two people.
-It runs as an installable mobile web app (PWA), so one codebase works on **Android and iPhone**. Open it in the browser and choose
-**Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: ⋮ → Install app). It then opens full-screen like a normal app.
+It runs as an installable app (PWA), so one codebase works on **Android and iPhone**. The first time someone opens the link in their
+browser, Slay offers to install itself: one tap on Android, or a short step-by-step guide on iPhone (Share → Add to Home Screen).
+After that it opens from the home screen full-screen, with its own icon and launch screen, like any app from the store.
 
 ## What it does
 
@@ -19,6 +20,8 @@ It runs as an installable mobile web app (PWA), so one codebase works on **Andro
 | **Dashboard** | Sales for today, this month and the last 6 months, plus monthly and daily charts, profit (sales − item cost), money still to collect, orders to send, deliveries due soon, and low stock. |
 | **Supplier bills** | Snap a photo of a supplier bill. It is timestamped automatically and is searchable by supplier, text and date, with spend totals for working out profit later. |
 | **eSewa** | "Send eSewa payment link" on any order with money owed. The customer pays on eSewa; the server checks the signature, **confirms the payment directly with eSewa's status API**, and marks the order paid. If the customer never comes back to the page, a background job still catches the payment. Uses eSewa's sandbox (test mode) until you switch to production. |
+| **Installed app (PWA)** | Custom Slay icon in every size Android and iPhone ask for (including Android's adaptive "maskable" and themed icons), a branded launch screen on both (no white flash), full-screen with no browser bars, and a status bar in Slay's colour. Long-press the icon on Android for **New order / Orders / Stock** shortcuts. **Install prompt:** on first open in a browser, a sheet explains how to install for that exact phone and browser: a one-tap **Install** button where supported, iPhone steps with pictures of the buttons, and "open in Safari/Chrome first" for links opened inside Instagram, Facebook or TikTok. It can be reopened any time from **More → Install the Slay app**. **Feel:** screens slide in when going deeper and back when returning, tabs cross-fade, sheets slide up and can be swiped down, and buttons, rows and tabs react to touch. There is no accidental text selection (except in fields, addresses and tracking numbers), and no double-tap or pinch zoom. Motion is reduced automatically if the phone's *Reduce motion* setting is on. |
+| **Offline** | The app itself is stored on the phone, so it opens instantly even with no signal. Recently viewed orders, stock, customers and the dashboard are saved too (and the photos you've seen), so they can still be looked at offline. A strip under the title says when you're offline and when you're back. Saving needs a connection: new orders and changes are **never queued offline**, because stock has to be checked live so nothing is sold twice. If you try, you get a clear "you're offline, this wasn't saved" message. Saved data belongs to whoever is signed in and is wiped from the phone on sign-out. |
 | **Security notifications** | Only for things worth knowing. Every team member is notified (in the app, as a phone notification, and optionally via a webhook) when **a device signs in for the first time**, or when something **suspicious** happens: repeated wrong passwords, account lockout (5 wrong attempts → 15 min), blocked sign-in floods, someone using a switched-off account, cancelling a paid order, many cancellations in an hour, or large manual stock removals. **Once a device has signed in successfully it is trusted, and its everyday sign-ins are silent.** Routine activity (team changes, password changes, biometrics turned on, deleted bills) goes into a quiet activity log under Security, with no notification. Anyone can see the trusted devices and remove one. A removed device is signed out, and its next sign-in notifies everyone again. |
 
 Returns and exchanges are not built yet, but the data model is ready for them (see *Extending* below).
@@ -29,7 +32,7 @@ Returns and exchanges are not built yet, but the data model is ready for them (s
 |---|---|
 | **On your computer** | `npm install`, then `npm run dev`, then open **http://localhost:5173**. On first start, the app asks you to create the owner account; the setup code is printed in the terminal. |
 | **On your phone, same Wi-Fi** | While `npm run dev` is running, open `http://<your-computer's-IP>:5173` on the phone. Vite prints this "Network" address when it starts. |
-| **For real use, anywhere** | Deploy it (see *Deploying* below) and open your own `https://…` address. Then use **Add to Home Screen** on each phone. |
+| **For real use, anywhere** | Deploy it (see *Deploying* below) and open your own `https://…` address on each phone. Slay offers to install itself; follow the prompt (or **More → Install the Slay app**). Installing needs HTTPS. |
 | **Quick look, no setup** | `npm run build:demo -w web` builds a self-contained **demo preview** in `web/dist-demo`. The whole app, server included, runs inside the browser on sample data, so it can be hosted as static files (`npm run preview:demo -w web` serves it locally). Fingerprint sign-in, notifications and eSewa need the real server, so they don't work in the demo. No texts or emails are sent: one-time codes are shown on screen instead. In the demo anyone can create an account and get straight in. |
 
 ## Running it
@@ -103,8 +106,12 @@ server/   Node + Express + SQLite (better-sqlite3)
                    receipts, dashboard, voice, uploads, live
 web/      React + TypeScript (Vite) installable PWA
   src/features/    one folder per screen area (orders, stock, receipts, …)
-  src/components/  shared UI (variant picker, voice input, photo capture, …)
+  src/components/  shared UI (variant picker, voice input, photo capture, install prompt, …)
+  src/lib/         API client, live sync, offline cache (persist.ts), PWA helpers (pwa.ts)
+  public/          manifest, icons, iPhone/iPad launch screens, service worker (sw.js)
 ```
+
+The service worker (`web/public/sw.js`) stores the app shell. The build writes the exact file list and a version into it, so installed phones update themselves the next time the app goes to the background. It never caches `/api` responses: offline data is kept by the app per signed-in person (`web/src/lib/persist.ts`), so one person's data is never served to another. Icons and launch screens are PNGs generated from the SVG artwork in `web/public/icons/`. If the artwork changes, regenerate all the sizes listed in `manifest.webmanifest` and `index.html`.
 
 These choices are what make future changes cheap:
 

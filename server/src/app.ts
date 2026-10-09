@@ -55,7 +55,20 @@ export function createApp(config: Config, opts: { db?: DB; modules?: AppModule[]
 
   // Serve the built web app (single-page app) in production.
   if (fs.existsSync(path.join(config.webDist, 'index.html'))) {
-    app.use(express.static(config.webDist, { index: false, maxAge: '1h' }));
+    app.use(
+      express.static(config.webDist, {
+        index: false,
+        maxAge: '1h',
+        setHeaders(res, file) {
+          const name = path.basename(file);
+          // Build files have content hashes in their names: cache them for good.
+          if (file.includes(`${path.sep}assets${path.sep}`)) res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+          // The service worker and manifest must always be checked, so app updates arrive promptly.
+          else if (name === 'sw.js' || name === 'manifest.webmanifest') res.setHeader('Cache-Control', 'no-cache');
+          if (name === 'manifest.webmanifest') res.setHeader('Content-Type', 'application/manifest+json');
+        },
+      }),
+    );
     app.get(/^\/(?!api|uploads).*/, (_req, res) => {
       res.setHeader('Cache-Control', 'no-cache');
       res.sendFile(path.join(config.webDist, 'index.html'));

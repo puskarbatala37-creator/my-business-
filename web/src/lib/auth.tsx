@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { createContext, useContext, useEffect, type ReactNode } from 'react';
 import { api, ApiError } from './api';
+import { clearSavedQueries } from './persist';
+import { clearOfflinePhotos } from './pwa';
 import type { Profile, User } from './types';
 
 interface Me {
@@ -28,6 +30,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     staleTime: Infinity,
     retry: 1,
   });
+  // Signed out (or the session ended): nothing of theirs stays saved on this phone.
+  const signedOut = q.data === null;
+  useEffect(() => {
+    if (!signedOut) return;
+    clearSavedQueries();
+    clearOfflinePhotos();
+  }, [signedOut]);
   useEffect(() => {
     const onOut = () => qc.setQueryData(['me'], null);
     window.addEventListener('slay:unauthenticated', onOut);

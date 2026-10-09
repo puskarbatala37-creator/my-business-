@@ -128,7 +128,7 @@ export function OrderDetailPage() {
           )}
           {o.tracking_number && (
             <div className="small">
-              Tracking: <strong className="num">{o.tracking_number}</strong>
+              Tracking: <strong className="num selectable">{o.tracking_number}</strong>
             </div>
           )}
           {active && (
@@ -189,7 +189,7 @@ export function OrderDetailPage() {
               <Icon name="phone" size={16} /> {o.customer.phone}
             </a>
           )}
-          {o.customer.address && <div className="small">{o.customer.address}</div>}
+          {o.customer.address && <div className="small selectable">{o.customer.address}</div>}
           {o.customer.social_handle && <div className="small muted">@{o.customer.social_handle.replace(/^@/, '')}</div>}
         </section>
 

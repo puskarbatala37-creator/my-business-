@@ -1,3 +1,4 @@
+import { BrandMark } from '../../components/BrandMark';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { CodeInput, DemoCode } from '../../components/CodeInput';
@@ -63,7 +64,7 @@ export function LoginPage() {
     <div className="login-wrap">
       <div className="card stack" style={{ width: '100%', maxWidth: 380, padding: 24 }}>
         <div className="center">
-          <div className="brand">Slay</div>
+          <div className="brand"><BrandMark width={128} /></div>
           <div className="muted small">Orders &amp; stock</div>
         </div>
 
@@ -178,7 +179,7 @@ function SignupPage({ mode, onDone, onCancel }: { mode: 'approval' | 'open' | 'c
     return (
       <div className="login-wrap">
         <div className="card stack center" style={{ width: '100%', maxWidth: 380, padding: 24 }}>
-          <div className="brand">Slay</div>
+          <div className="brand"><BrandMark width={128} /></div>
           <h1>Almost there</h1>
           <div>{waiting}</div>
           <div className="small muted">
@@ -367,7 +368,7 @@ function SetupPage({ onDone }: { onDone: () => void }) {
         }}
       >
         <div className="center">
-          <div className="brand">Slay</div>
+          <div className="brand"><BrandMark width={128} /></div>
           <div className="small muted">Welcome! Create the first owner account. You can add the rest of the team from the app afterwards.</div>
         </div>
         {field('code', 'Setup code (shown in the server log)', { inputMode: 'numeric', autoComplete: 'off' })}

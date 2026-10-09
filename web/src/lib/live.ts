@@ -2,6 +2,7 @@ import type { LiveEvent } from '@slay/shared';
 import { LIVE_EVENTS } from '@slay/shared';
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
+import { reportNetwork } from './online';
 
 /** Which cached screens to refresh for each live event. */
 const INVALIDATES: Record<string, string[][]> = {
@@ -27,10 +28,18 @@ export function useLiveSync(userId: number | undefined, onEvent?: (e: LiveEvent)
     if (!userId) return;
     let es: EventSource | null = null;
     let retry: ReturnType<typeof setTimeout>;
+    let dropped = false;
     const open = () => {
       es = new EventSource('/api/live');
-      es.onopen = () => setConnected(true);
+      es.onopen = () => {
+        setConnected(true);
+        reportNetwork(true);
+        // Back after a drop (no signal, server restart): catch up on anything missed.
+        if (dropped) qc.invalidateQueries();
+        dropped = false;
+      };
       es.onerror = () => {
+        dropped = true;
         setConnected(false);
         if (es?.readyState === EventSource.CLOSED) retry = setTimeout(open, 3000);
       };

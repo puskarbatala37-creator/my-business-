@@ -1,8 +1,9 @@
 import { PAYMENT_STATUS_LABELS, platformLabel, type FulfillmentStatus, type OrderState, type PaymentStatus } from '@slay/shared';
-import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { uploadPhoto } from '../lib/image';
 import { Icon } from './Icon';
+import { OfflineBar } from './OfflineBar';
 
 // ── Toasts ──────────────────────────────────────────────────────────────
 type Toast = { id: number; text: string; error?: boolean };
@@ -44,6 +45,7 @@ export function TopBar({ title, back, actions }: { title: ReactNode; back?: bool
         <h1>{title}</h1>
         {actions}
       </div>
+      <OfflineBar />
     </header>
   );
 }
@@ -52,22 +54,47 @@ export const Spinner = () => <div className="spinner" aria-label="Loading" />;
 export const Empty = ({ children }: { children: ReactNode }) => <div className="empty">{children}</div>;
 
 export function Sheet({ title, onClose, children }: { title: ReactNode; onClose: () => void; children: ReactNode }) {
+  const [closing, setClosing] = useState(false);
+  const [drag, setDrag] = useState(0);
+  const start = useRef<number | null>(null);
+  // Slide away (like a native sheet) before actually closing.
+  const close = useCallback(() => {
+    setClosing(true);
+    setTimeout(onClose, REDUCED_MOTION() ? 0 : 180);
+  }, [onClose]);
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
     window.addEventListener('keydown', onKey);
     return () => {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
     };
-  }, [onClose]);
+  }, [close]);
+  // Pull the sheet down by its title bar to dismiss it.
+  const drag$ = {
+    onTouchStart: (e: TouchEvent) => (start.current = e.touches[0].clientY),
+    onTouchMove: (e: TouchEvent) => start.current !== null && setDrag(Math.max(0, e.touches[0].clientY - start.current)),
+    onTouchEnd: () => {
+      start.current = null;
+      if (drag > 90) close();
+      setDrag(0);
+    },
+  };
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="sheet-head">
+    <div className={`sheet-backdrop ${closing ? 'closing' : ''}`} onClick={close}>
+      <div
+        className="sheet"
+        role="dialog"
+        aria-modal="true"
+        onClick={(e) => e.stopPropagation()}
+        style={drag ? { transform: `translateY(${drag}px)`, transition: 'none' } : undefined}
+      >
+        <div className="sheet-head" {...drag$}>
+          <span className="sheet-grip" aria-hidden="true" />
           <h2>{title}</h2>
-          <button className="icon-btn" aria-label="Close" onClick={onClose}>
+          <button className="icon-btn" aria-label="Close" onClick={close}>
             <Icon name="x" />
           </button>
         </div>
@@ -76,6 +103,7 @@ export function Sheet({ title, onClose, children }: { title: ReactNode; onClose:
     </div>
   );
 }
+const REDUCED_MOTION = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
 // ── Status badges (always text + colour, never colour alone) ────────────
 export function PaymentBadge({ status, balance }: { status: PaymentStatus; balance?: number }) {

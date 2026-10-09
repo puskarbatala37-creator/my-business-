@@ -1,3 +1,4 @@
+import { BrandMark } from '../../components/BrandMark';
 import { useQuery } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
@@ -26,7 +27,7 @@ export function PayPage() {
   return (
     <div className="login-wrap">
       <div className="card stack center" style={{ width: '100%', maxWidth: 400, padding: 24 }}>
-        <div className="brand">Slay</div>
+        <div className="brand"><BrandMark width={128} /></div>
         {q.isLoading && <Spinner />}
         {q.isError && <div>This payment link is not valid.</div>}
         {p && (
