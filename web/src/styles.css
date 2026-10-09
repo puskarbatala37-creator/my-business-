@@ -319,8 +319,16 @@ textarea.input { min-height: 80px; resize: vertical; }
 .invoice table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .invoice th, .invoice td { padding: 6px 4px; border-bottom: 1px solid #eee; text-align: left; }
 .invoice td.r, .invoice th.r { text-align: right; }
+.invoice-actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.invoice-actions .btn { padding: 0 8px; }
 @media print {
-  .no-print, .bottom-nav, .topbar { display: none !important; }
+  @page { margin: 12mm; }
+  .no-print, .bottom-nav, .topbar, .toasts, .demo-banner, .net-bar, .sheet-backdrop, #splash { display: none !important; }
+  .standalone body::before { display: none; }
+  .screen { animation: none !important; }
+  .page { max-width: none; padding: 0; }
+  .invoice { padding: 0; }
+  .invoice, .invoice * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .app { padding: 0; }
   body { background: #fff; }
   .invoice { border: 0; }

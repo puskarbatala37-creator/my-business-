@@ -2,10 +2,12 @@ import { PAYMENT_METHOD_LABELS, PAYMENT_METHODS, todayInBusinessTz, type Payment
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
+import { CopySheet } from '../../components/CopySheet';
 import { Icon } from '../../components/Icon';
 import { FulfillmentBadge, MoneyInput, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { dateTime, longDate, npr, relativeDue, shortDate } from '../../lib/format';
+import { shareOrCopy } from '../../lib/share';
 import type { OrderDetail } from '../../lib/types';
 
 interface PayRequest {
@@ -14,19 +16,6 @@ interface PayRequest {
   amount: number;
   status: string;
   created_at: string;
-}
-
-export async function shareOrCopy(title: string, text: string, url?: string) {
-  if (navigator.share) {
-    try {
-      await navigator.share({ title, text, url });
-      return 'shared';
-    } catch {
-      return 'cancelled';
-    }
-  }
-  await navigator.clipboard.writeText(url ? `${text}\n${url}` : text);
-  return 'copied';
 }
 
 export function OrderDetailPage() {
@@ -38,6 +27,7 @@ export function OrderDetailPage() {
   const q = useQuery({ queryKey: ['order', orderId], queryFn: () => api.get<OrderDetail>(`/api/orders/${orderId}`) });
   const requests = useQuery({ queryKey: ['order', orderId, 'pay-requests'], queryFn: () => api.get<{ requests: PayRequest[] }>(`/api/payments/orders/${orderId}/requests`) });
   const [sheet, setSheet] = useState<null | 'pay' | 'send' | 'cancel'>(null);
+  const [manualCopy, setManualCopy] = useState<string | null>(null);
 
   const update = (o: OrderDetail) => {
     qc.setQueryData(['order', orderId], o);
@@ -62,8 +52,10 @@ export function OrderDetailPage() {
     try {
       const r = await api.post<{ url: string; amount: number }>('/api/payments/requests', { order_id: orderId, provider: 'esewa' });
       requests.refetch();
-      const res = await shareOrCopy('Pay with eSewa', `Hi ${o!.customer.name.split(' ')[0]}, please pay ${npr(r.amount)} for order ${o!.invoice_no} with eSewa:`, r.url);
+      const message = `Hi ${o!.customer.name.split(' ')[0]}, please pay ${npr(r.amount)} for order ${o!.invoice_no} with eSewa:`;
+      const res = await shareOrCopy('Pay with eSewa', message, r.url);
       if (res === 'copied') toast('Payment link copied – paste it in the chat');
+      if (res === 'failed') setManualCopy(`${message}\n${r.url}`);
     } catch (e) {
       toast((e as Error).message, true);
     }
@@ -312,6 +304,7 @@ export function OrderDetailPage() {
       </main>
 
       {sheet === 'pay' && <PaymentSheet balance={o.balance_due} onClose={() => setSheet(null)} onSave={(amount, method) => run.mutate(() => api.post(`/api/orders/${orderId}/payments`, { amount, method }))} />}
+      {manualCopy && <CopySheet title="eSewa payment link" text={manualCopy} onClose={() => setManualCopy(null)} />}
       {sheet === 'send' && <SendSheet initial={o.tracking_number} onClose={() => setSheet(null)} onSave={(tracking) => run.mutate(() => api.patch(`/api/orders/${orderId}`, { fulfillment_status: 'sent', tracking_number: tracking }))} />}
       {sheet === 'cancel' && <CancelSheet onClose={() => setSheet(null)} onSave={(reason) => run.mutate(() => api.post(`/api/orders/${orderId}/cancel`, { reason }))} />}
     </>
