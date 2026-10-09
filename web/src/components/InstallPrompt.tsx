@@ -37,12 +37,19 @@ export function InstallPrompt() {
     const show = () => setOpen(true);
     window.addEventListener(OPEN_INSTALL, show);
     let t: ReturnType<typeof setTimeout> | undefined;
-    if (canInstallHere() && !shownThisVisit && !recentlyDismissed()) {
-      t = setTimeout(() => {
-        shownThisVisit = true;
-        setOpen(true);
-      }, 1200);
-    }
+    // Never pop up over someone typing (e.g. halfway through signing in) or over another panel:
+    // wait until they pause.
+    const busy = () => !!document.querySelector('.sheet') || !!document.activeElement?.matches('input, textarea, select');
+    const tryShow = () => {
+      if (shownThisVisit) return;
+      if (busy()) {
+        t = setTimeout(tryShow, 1500);
+        return;
+      }
+      shownThisVisit = true;
+      setOpen(true);
+    };
+    if (canInstallHere() && !shownThisVisit && !recentlyDismissed()) t = setTimeout(tryShow, 1200);
     return () => {
       clearTimeout(t);
       window.removeEventListener(OPEN_INSTALL, show);
