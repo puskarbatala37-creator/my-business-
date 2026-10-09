@@ -205,7 +205,7 @@ export function OrderDetailPage() {
                   <div className="strong">{i.product_name}</div>
                   <div className="small">
                     {i.color}
-                    {i.size && ` · Size ${i.size}`}
+                    {i.size && ` · ${i.sizes ? 'Sizes' : 'Size'} ${i.size}`}
                   </div>
                   <div className="small muted num">
                     {i.quantity} × {npr(i.unit_price)}

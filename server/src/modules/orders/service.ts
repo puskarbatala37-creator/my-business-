@@ -2,6 +2,7 @@ import {
   derivePaymentStatus,
   LIVE_EVENTS,
   money,
+  sizeSummary,
   todayInBusinessTz,
   type FulfillmentStatus,
   type PaymentMethod,
@@ -20,6 +21,8 @@ export interface OrderItemInput {
   id?: number | null; // existing line when editing
   variant_id: number;
   size?: string;
+  /** One size per piece when they differ, e.g. ["42", "41"] for two kurtas. */
+  sizes?: string[] | null;
   quantity: number;
   unit_price: number;
   photo?: string | null; // defaults to the variant's photo
@@ -147,7 +150,8 @@ export class OrderService {
         `SELECT i.*, v.stock AS current_stock, v.product_id FROM order_items i LEFT JOIN variants v ON v.id = i.variant_id
           WHERE i.order_id = ? ORDER BY i.id`,
       )
-      .all(id);
+      .all(id)
+      .map((i: any) => ({ ...i, sizes: i.unit_sizes ? (JSON.parse(i.unit_sizes) as string[]) : null, unit_sizes: undefined }));
     const payments = this.db
       .prepare(`SELECT p.*, u.display_name AS created_by_name FROM payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.order_id = ? ORDER BY p.id`)
       .all(id);
@@ -254,8 +258,8 @@ export class OrderService {
         if (diff < 0) this.catalog.give(item.variant_id, -diff, 'order_edit', user.id, id, old.id);
         if (diff !== 0) variantIds.add(item.variant_id);
         this.db
-          .prepare('UPDATE order_items SET size = ?, quantity = ?, unit_price = ?, photo = COALESCE(?, photo) WHERE id = ?')
-          .run(item.size ?? '', item.quantity, money(item.unit_price), item.photo ?? null, old.id);
+          .prepare('UPDATE order_items SET size = ?, unit_sizes = ?, quantity = ?, unit_price = ?, photo = COALESCE(?, photo) WHERE id = ?')
+          .run(...lineSizes(item), item.quantity, money(item.unit_price), item.photo ?? null, old.id);
       }
 
       const fulfillment = input.fulfillment_status ?? current.fulfillment_status;
@@ -370,10 +374,10 @@ export class OrderService {
     const v = this.catalog.getVariant(item.variant_id);
     const row = this.db
       .prepare(
-        `INSERT INTO order_items (order_id, variant_id, product_name, category_name, color, size, quantity, unit_price, unit_cost, photo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        `INSERT INTO order_items (order_id, variant_id, product_name, category_name, color, size, unit_sizes, quantity, unit_price, unit_cost, photo)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       )
-      .get(orderId, v.id, v.product_name, v.category_name, v.color, item.size ?? '', item.quantity, money(item.unit_price), v.cost, item.photo || v.photo) as { id: number };
+      .get(orderId, v.id, v.product_name, v.category_name, v.color, ...lineSizes(item), item.quantity, money(item.unit_price), v.cost, item.photo || v.photo) as { id: number };
     this.catalog.take(v.id, item.quantity, 'order', userId, orderId, row.id);
     return v.id;
   }
@@ -403,4 +407,14 @@ export class OrderService {
 
 function withBalance<T extends { total: number; amount_paid: number }>(o: T) {
   return { ...o, balance_due: Math.max(0, money(o.total - o.amount_paid)) };
+}
+
+/**
+ * `size` always holds what to show ("42", or "42, 41" when pieces differ – also what search looks
+ * at); `unit_sizes` keeps the size of each piece only when they actually differ.
+ */
+function lineSizes(item: OrderItemInput): [string, string | null] {
+  const sizes = item.sizes?.length === item.quantity ? item.sizes.map((s) => s.trim()) : null;
+  if (!sizes || new Set(sizes).size <= 1) return [sizes?.[0] ?? item.size ?? '', null];
+  return [sizeSummary(sizes), JSON.stringify(sizes)];
 }

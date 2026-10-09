@@ -37,6 +37,16 @@ export type OrderState = (typeof ORDER_STATES)[number];
 export const PLATFORMS = ['tiktok', 'facebook', 'instagram', 'whatsapp'] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+/**
+ * One size per piece on an order line, as shown on orders and invoices: ["42", "42", "41"] → "42 ×2, 41".
+ * Blank sizes are left out.
+ */
+export function sizeSummary(sizes: readonly string[]): string {
+  const counts = new Map<string, number>();
+  for (const s of sizes.map((x) => x.trim()).filter(Boolean)) counts.set(s, (counts.get(s) ?? 0) + 1);
+  return [...counts].map(([s, n]) => (n > 1 ? `${s} ×${n}` : s)).join(', ');
+}
+
 /** What a supplier bill was for. Teams can add their own types on top of these. */
 export const RECEIPT_TYPE_PRESETS = ['Fabric', 'Stitching', 'Ready-made', 'Thread'] as const;
 

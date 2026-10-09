@@ -385,3 +385,5 @@ textarea.input { min-height: 80px; resize: vertical; }
 .toggle-row:active .switch::after { width: 28px; }
 .toggle-row:active .switch.on::after { transform: translateX(16px); }
 .field-group { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-2); font-weight: 500; }
+/* One size per piece (order form) */
+.piece-sizes { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 8px; padding: 10px; border-radius: 12px; background: var(--surface-2); }

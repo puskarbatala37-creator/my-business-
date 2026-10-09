@@ -15,7 +15,7 @@ export function invoiceText(o: OrderDetail) {
     `Ordered via: ${platformLabel(o.platform)}`,
     `Customer: ${o.customer.name}${o.customer.phone ? ' (' + o.customer.phone + ')' : ''}`,
     '',
-    ...o.items.map((i) => `• ${i.product_name} – ${i.color}${i.size ? ', size ' + i.size : ''}: ${i.quantity} × ${npr(i.unit_price)} = ${npr(i.quantity * i.unit_price)}`),
+    ...o.items.map((i) => `• ${i.product_name} – ${i.color}${i.size ? (i.sizes ? ', sizes ' : ', size ') + i.size : ''}: ${i.quantity} × ${npr(i.unit_price)} = ${npr(i.quantity * i.unit_price)}`),
     '',
     o.delivery_charge ? `Delivery: ${npr(o.delivery_charge)}` : '',
     o.discount ? `Discount: −${npr(o.discount)}` : '',
@@ -85,7 +85,7 @@ export function InvoicePage() {
                 <tr key={i.id}>
                   <td>
                     {i.product_name} – {i.color}
-                    {i.size && <div style={{ fontSize: 12, color: '#666' }}>Size {i.size}</div>}
+                    {i.size && <div style={{ fontSize: 12, color: '#666' }}>{i.sizes ? 'Sizes' : 'Size'} {i.size}</div>}
                   </td>
                   <td className="r">{i.quantity}</td>
                   <td className="r">{npr(i.unit_price)}</td>

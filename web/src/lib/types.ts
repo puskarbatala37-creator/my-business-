@@ -115,7 +115,10 @@ export interface OrderItem {
   product_id: number | null;
   product_name: string;
   color: string;
+  /** What to show: "42", or "42, 41" when pieces differ. */
   size: string;
+  /** One size per piece when they differ; null when all pieces share `size`. */
+  sizes: string[] | null;
   quantity: number;
   unit_price: number;
   unit_cost: number;

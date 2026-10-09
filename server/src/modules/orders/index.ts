@@ -7,14 +7,18 @@ import { idParam, parse, zDate, zMoney, zText } from '../../core/http.js';
 import { zCustomer } from '../customers/index.js';
 import { OrderService } from './service.js';
 
-const zItem = z.object({
-  id: z.coerce.number().int().positive().nullable().optional(),
-  variant_id: z.coerce.number().int().positive(),
-  size: zText(40).optional(),
-  quantity: z.coerce.number().int().min(1).max(1000),
-  unit_price: zMoney,
-  photo: z.string().max(300).nullable().optional(),
-});
+const zItem = z
+  .object({
+    id: z.coerce.number().int().positive().nullable().optional(),
+    variant_id: z.coerce.number().int().positive(),
+    size: zText(40).optional(),
+    /** A size for each piece, when they differ (one entry per piece). */
+    sizes: z.array(zText(40)).max(1000).nullable().optional(),
+    quantity: z.coerce.number().int().min(1).max(1000),
+    unit_price: zMoney,
+    photo: z.string().max(300).nullable().optional(),
+  })
+  .refine((i) => !i.sizes || i.sizes.length === i.quantity, { message: 'give one size for each piece', path: ['sizes'] });
 
 const zOrder = z.object({
   customer: zCustomer,

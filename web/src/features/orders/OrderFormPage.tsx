@@ -4,6 +4,7 @@ import {
   PAYMENT_METHODS,
   platformLabel,
   PLATFORMS,
+  sizeSummary,
   todayInBusinessTz,
   type PaymentMethod,
   type PaymentStatus,
@@ -27,6 +28,8 @@ interface Line {
   candidates?: number[];
   heard?: string;
   size: string;
+  /** A size for each piece (e.g. two kurtas, 42 and 41); null = every piece is `size`. */
+  sizes: string[] | null;
   quantity: number;
   unit_price: number | '';
   photo: string | null;
@@ -74,7 +77,7 @@ function fromOrder(o: OrderDetail): FormState {
     // Older orders may hold a source that is no longer offered – ask again when editing.
     platform: (PLATFORMS as readonly string[]).includes(o.platform) ? (o.platform as Platform) : '',
     order_date: o.order_date,
-    items: o.items.map((i) => ({ key: newKey(), id: i.id, variant_id: i.variant_id, size: i.size, quantity: i.quantity, unit_price: i.unit_price, photo: i.photo, reserved: i.quantity })),
+    items: o.items.map((i) => ({ key: newKey(), id: i.id, variant_id: i.variant_id, size: i.sizes ? '' : i.size, sizes: i.sizes, quantity: i.quantity, unit_price: i.unit_price, photo: i.photo, reserved: i.quantity })),
     delivery_charge: o.delivery_charge || '',
     discount: o.discount || '',
     delivery_due_date: o.delivery_due_date ?? '',
@@ -123,6 +126,13 @@ export function OrderFormPage() {
   const set = <K extends keyof FormState>(k: K, v: FormState[K]) => setForm((f) => ({ ...f, [k]: v }));
   const setCustomer = (patch: Partial<FormState['customer']>) => setForm((f) => ({ ...f, customer: { ...f.customer, ...patch } }));
   const setLine = (key: string, patch: Partial<Line>) => setForm((f) => ({ ...f, items: f.items.map((l) => (l.key === key ? { ...l, ...patch } : l)) }));
+  /** Changing the quantity keeps one size per piece: new pieces start with the last piece's size. */
+  const setQuantity = (l: Line, quantity: number) => {
+    if (!l.sizes) return setLine(l.key, { quantity });
+    if (quantity < 2) return setLine(l.key, { quantity, sizes: null, size: l.sizes[0] ?? '' });
+    const last = l.sizes[l.sizes.length - 1] ?? '';
+    setLine(l.key, { quantity, sizes: Array.from({ length: quantity }, (_, i) => l.sizes![i] ?? last) });
+  };
 
   // Returning customer lookup by phone → previous orders.
   const phoneDigits = form.customer.phone.replace(/\D/g, '').replace(/^977/, '');
@@ -152,7 +162,7 @@ export function OrderFormPage() {
     } else {
       setForm((f) => ({
         ...f,
-        items: [...f.items, { key: newKey(), variant_id: p.variant.id, size: sizes.length === 1 ? sizes[0] : '', quantity: 1, unit_price: p.variant.price, photo: p.variant.photo, reserved: 0 }],
+        items: [...f.items, { key: newKey(), variant_id: p.variant.id, size: sizes.length === 1 ? sizes[0] : '', sizes: null, quantity: 1, unit_price: p.variant.price, photo: p.variant.photo, reserved: 0 }],
       }));
     }
     setPicker(null);
@@ -179,6 +189,7 @@ export function OrderFormPage() {
                 candidates: it.variant_id ? undefined : it.candidates,
                 heard: it.heard,
                 size: it.size,
+                sizes: null,
                 quantity: it.quantity,
                 unit_price: it.unit_price ?? v?.variant.price ?? '',
                 photo: v?.variant.photo ?? null,
@@ -227,7 +238,7 @@ export function OrderFormPage() {
       tracking_number: form.tracking_number,
       notes: form.notes,
       payment_method: form.payment.status === 'unpaid' ? null : form.payment.method,
-      items: form.items.map((l) => ({ id: l.id ?? null, variant_id: l.variant_id, size: l.size, quantity: l.quantity, unit_price: Number(l.unit_price), photo: l.photo })),
+      items: form.items.map((l) => ({ id: l.id ?? null, variant_id: l.variant_id, size: l.size, sizes: l.sizes, quantity: l.quantity, unit_price: Number(l.unit_price), photo: l.photo })),
     };
     try {
       const saved = editing
@@ -387,27 +398,52 @@ export function OrderFormPage() {
                 <div className="grid-3" style={{ alignItems: 'end' }}>
                   <label className="field">
                     Qty
-                    <Stepper value={l.quantity} onChange={(n) => setLine(l.key, { quantity: n })} />
+                    <Stepper value={l.quantity} onChange={(n) => setQuantity(l, n)} />
                   </label>
-                  <label className="field">
-                    Size
-                    {sizes.length > 1 ? (
-                      <select className="input" value={l.size} onChange={(e) => setLine(l.key, { size: e.target.value })}>
-                        <option value="">–</option>
-                        {sizes.map((s) => (
-                          <option key={s}>{s}</option>
-                        ))}
-                        {l.size && !sizes.includes(l.size) && <option>{l.size}</option>}
-                      </select>
-                    ) : (
-                      <input className="input" value={l.size} onChange={(e) => setLine(l.key, { size: e.target.value })} placeholder="Free" />
-                    )}
-                  </label>
+                  {l.sizes ? (
+                    <div className="field-group">
+                      Size
+                      <div className="input" style={{ display: 'flex', alignItems: 'center', color: 'var(--text-2)', background: 'var(--surface-2)' }}>
+                        {sizeSummary(l.sizes) || 'Each piece ↓'}
+                      </div>
+                    </div>
+                  ) : (
+                    <label className="field">
+                      Size
+                      <SizeInput sizes={sizes} value={l.size} onChange={(size) => setLine(l.key, { size })} />
+                    </label>
+                  )}
                   <label className="field">
                     Price each
                     <MoneyInput value={l.unit_price} onChange={(n) => setLine(l.key, { unit_price: n })} />
                   </label>
                 </div>
+                {l.sizes && (
+                  <div className="piece-sizes">
+                    {l.sizes.map((s, i) => (
+                      <label key={i} className="field">
+                        Piece {i + 1}
+                        <SizeInput
+                          sizes={sizes}
+                          value={s}
+                          onChange={(size) => setLine(l.key, { sizes: l.sizes!.map((x, j) => (j === i ? size : x)) })}
+                        />
+                      </label>
+                    ))}
+                  </div>
+                )}
+                {l.quantity > 1 && (
+                  <button
+                    type="button"
+                    className="btn ghost sm"
+                    style={{ alignSelf: 'flex-start', padding: 0, minHeight: 28, color: 'var(--accent)' }}
+                    onClick={() =>
+                      setLine(l.key, l.sizes ? { sizes: null, size: l.sizes[0] ?? '' } : { sizes: Array.from({ length: l.quantity }, () => l.size) })
+                    }
+                  >
+                    {l.sizes ? 'Same size for every piece' : `Different size for each piece (${l.quantity} pieces)`}
+                  </button>
+                )}
               </div>
             );
           })}
@@ -534,4 +570,19 @@ export function OrderFormPage() {
       )}
     </>
   );
+}
+
+/** A size: a dropdown of the product's sizes when it has several, otherwise free text. */
+function SizeInput({ sizes, value, onChange }: { sizes: string[]; value: string; onChange: (size: string) => void }) {
+  if (sizes.length > 1)
+    return (
+      <select className="input" value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">–</option>
+        {sizes.map((s) => (
+          <option key={s}>{s}</option>
+        ))}
+        {value && !sizes.includes(value) && <option>{value}</option>}
+      </select>
+    );
+  return <input className="input" value={value} onChange={(e) => onChange(e.target.value)} placeholder="Free" />;
 }
