@@ -51,6 +51,37 @@ export function TopBar({ title, back, actions }: { title: ReactNode; back?: bool
 }
 
 export const Spinner = () => <div className="spinner" aria-label="Loading" />;
+
+/**
+ * While a screen's data loads: a spinner – or, if it can't load, a plain explanation and a way
+ * forward instead of spinning for ever.
+ */
+export function Loading({ error, retry, what = 'this' }: { error?: unknown; retry?: () => void; what?: string }) {
+  const nav = useNavigate();
+  if (!error) return <Spinner />;
+  const e = error as { status?: number; code?: string; message?: string };
+  const text =
+    e.status === 404 || e.code === 'missing'
+      ? `This ${what} doesn’t exist any more – it may have been deleted.`
+      : e.code === 'offline'
+        ? `You’re offline, and ${what === 'this' ? 'this' : `this ${what}`} isn’t saved on this phone yet. It will load when you’re back online.`
+        : e.message || `Couldn’t load ${what}. Check your connection and try again.`;
+  return (
+    <div className="page stack" style={{ paddingTop: 40, textAlign: 'center' }} role="alert">
+      <div className="small">{text}</div>
+      <div className="btn-row" style={{ maxWidth: 360, margin: '0 auto', width: '100%' }}>
+        <button className="btn" onClick={() => nav(-1)}>
+          Go back
+        </button>
+        {retry && e.status !== 404 && e.code !== 'missing' && (
+          <button className="btn primary" onClick={() => retry()}>
+            Try again
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 export const Empty = ({ children }: { children: ReactNode }) => <div className="empty">{children}</div>;
 
 export function Sheet({ title, onClose, children }: { title: ReactNode; onClose: () => void; children: ReactNode }) {

@@ -9,12 +9,21 @@ import { HttpError } from './core/http.js';
 import { openDatabase, type DB } from './db/index.js';
 import { requireAuth, sessionMiddleware } from './modules/auth/index.js';
 import { modules as defaultModules } from './modules/index.js';
+import { restoreIfRequested } from './modules/backups/service.js';
 import { serveUploads } from './modules/uploads/index.js';
+
+/** A backup waiting in DATA_DIR/restore is swapped in before the database is opened. */
+function restoreFirst(config: Config) {
+  if (config.dbFile === ':memory:') return config.dbFile;
+  const restored = restoreIfRequested(config.dataDir, config.dbFile);
+  if (restored) console.log(`[backups] Restored data from ${restored}. The data it replaced is in ${config.dataDir}/backups.`);
+  return config.dbFile;
+}
 
 export function createApp(config: Config, opts: { db?: DB; modules?: AppModule[] } = {}) {
   const ctx: AppContext = {
     config,
-    db: opts.db ?? openDatabase(config.dbFile),
+    db: opts.db ?? openDatabase(restoreFirst(config)),
     bus: new EventBus(),
     services: {},
   };
@@ -38,7 +47,7 @@ export function createApp(config: Config, opts: { db?: DB; modules?: AppModule[]
   // browsers will not send cross-site without a CORS pre-flight we never allow.
   app.use('/api', (req, _res, next) => {
     if (['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
-    if (req.get('x-slay') !== '1') return next(new HttpError(403, 'Missing request header'));
+    if (req.get('x-slay') !== '1') return next(new HttpError(403, 'Please close Slay and open it again, then try once more.'));
     next();
   });
 
@@ -49,7 +58,7 @@ export function createApp(config: Config, opts: { db?: DB; modules?: AppModule[]
     if (m.public) app.use(mount, m.routes(ctx));
     else app.use(mount, requireAuth, m.routes(ctx));
   }
-  app.use('/api', (_req, _res, next) => next(new HttpError(404, 'Not found')));
+  app.use('/api', (_req, _res, next) => next(new HttpError(404, 'This isn’t available any more. Please update Slay by closing and reopening it.')));
 
   app.use('/uploads', requireAuth, serveUploads(config.uploadsDir));
 
@@ -81,11 +90,11 @@ export function createApp(config: Config, opts: { db?: DB; modules?: AppModule[]
       return;
     }
     if (err?.type === 'entity.parse.failed') {
-      res.status(400).json({ error: 'Invalid JSON' });
+      res.status(400).json({ error: 'Something went wrong sending that. Please try again.' });
       return;
     }
     if (err?.code === 'LIMIT_FILE_SIZE') {
-      res.status(413).json({ error: 'File is too large' });
+      res.status(413).json({ error: 'This photo is too large (over 15 MB). Take a new photo or choose a smaller one.' });
       return;
     }
     console.error(err);

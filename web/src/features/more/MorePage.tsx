@@ -9,6 +9,7 @@ import { useAuth } from '../../lib/auth';
 import { ConfirmPhone } from '../auth/CompleteAccountPage';
 
 const LINKS = [
+  { to: '/more/guide', icon: 'orders', label: 'How to use Slay', sub: 'Orders, stock, payments and voice – in 5 minutes' },
   { to: '/receipts', icon: 'receipt', label: 'Supplier bills', sub: 'Photos of stock & material purchases' },
   { to: '/customers', icon: 'users', label: 'Customers', sub: 'Contacts and order history' },
   { to: '/more/team', icon: 'team', label: 'Team', sub: 'Add team members, reset passwords' },
@@ -16,7 +17,10 @@ const LINKS = [
   { to: '/more/security', icon: 'shield', label: 'Security', sub: 'Fingerprint / face sign-in, alerts, devices' },
 ];
 
-const OWNER_LINKS = [{ to: '/more/setup', icon: 'check', label: 'Setup check', sub: 'Is SMS, email & notifications working? Send test messages' }];
+const OWNER_LINKS = [
+  ...(import.meta.env.VITE_DEMO === '1' ? [] : [{ to: '/more/backups', icon: 'download', label: 'Backups', sub: 'Daily copies of all data · save one to your phone weekly' }]),
+  { to: '/more/setup', icon: 'check', label: 'Setup check', sub: 'Is SMS, email & notifications working? Send test messages' },
+];
 
 export function MorePage() {
   const { me } = useAuth();

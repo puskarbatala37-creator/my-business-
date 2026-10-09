@@ -35,7 +35,7 @@ describe('product types', () => {
     const { teza } = await ready();
     const r = await teza.post('/api/catalog/products', { name: 'X', variants: [{ color: 'Red' }] });
     expect(r.status).toBe(400);
-    expect(r.body.error).toContain('choose a category');
+    expect(r.body.error).toMatch(/choose a category/i);
   });
 });
 

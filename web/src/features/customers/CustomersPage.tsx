@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
-import { Empty, FulfillmentBadge, PaymentBadge, PlatformBadge, Sheet, Spinner, TopBar, useToast } from '../../components/ui';
+import { Empty, FulfillmentBadge, Loading, PaymentBadge, PlatformBadge, Sheet, Spinner, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { npr, shortDate } from '../../lib/format';
 import type { Customer, HistoryRow } from '../../lib/types';
@@ -52,7 +52,7 @@ export function CustomerPage() {
   const { id } = useParams();
   const [editing, setEditing] = useState(false);
   const q = useQuery({ queryKey: ['customer', Number(id)], queryFn: () => api.get<{ customer: Customer; orders: (HistoryRow & { balance_due?: number })[] }>(`/api/customers/${id}`) });
-  if (!q.data) return <Spinner />;
+  if (!q.data) return <Loading error={q.error} retry={q.refetch} what="customer" />;
   const { customer: c, orders } = q.data;
   const active = orders.filter((o) => o.state === 'active');
   const spent = active.reduce((s, o) => s + o.total, 0);

@@ -95,7 +95,8 @@ export class PasskeyService {
         requireUserVerification: true,
       });
     } catch (e) {
-      throw new HttpError(400, `Could not set up biometric login: ${(e as Error).message}`);
+      console.warn('[passkeys] registration failed:', (e as Error).message);
+      throw new HttpError(400, 'Couldn’t turn on fingerprint / face sign-in. Please try again – your password still works.');
     }
     if (!result.verified) throw new HttpError(400, 'Could not set up biometric login');
     const { credential } = result.registrationInfo;

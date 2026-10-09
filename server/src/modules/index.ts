@@ -1,5 +1,6 @@
 import type { AppModule } from '../core/context.js';
 import { authModule } from './auth/index.js';
+import { backupsModule } from './backups/index.js';
 import { catalogModule } from './catalog/index.js';
 import { customersModule } from './customers/index.js';
 import { dashboardModule } from './dashboard/index.js';
@@ -33,4 +34,5 @@ export const modules: AppModule[] = [
   uploadsModule,
   liveModule,
   systemModule,
+  backupsModule,
 ];

@@ -2,6 +2,18 @@ import { addDays, money, type PaymentMethod, type PaymentStatus, type Platform }
 import * as L from './lexicon.js';
 import { COUNTER_WORDS, normalizeNumbers } from './numbers.js';
 
+/** Words that can sit between a payment amount and "paid": the method and little joining words. */
+const PAY_FILLER = new Set([
+  ...Object.values(L.METHODS).flat().filter((w) => !w.includes(' ')),
+  'बाट', 'मा', 'ले', 'मार्फत', 'द्वारा', 'by', 'via', 'with', 'through', 'on', 'in', 'from', 'ma', 'bata', 'le', 'rs', 'रु', 'रुपैयाँ', 'रुपैया', 'rupees', 'rupaiya',
+]);
+
+/** Words that can stand next to an item's price, quantity or size on their own ("2500 each", "एउटाको २५००"). */
+const ITEM_DETAIL_WORDS = new Set([
+  'each', 'per', 'piece', 'pieces', 'pc', 'pcs', 'price', 'rs', 'rupees', 'rupaiya', 'rupiya', 'at', 'for', 'ko', 'wota', 'wata',
+  'वटा', 'वटाको', 'एउटाको', 'एकको', 'को', 'प्रति', 'पिस', 'रु', 'रुपैयाँ', 'रुपैया', 'रूपैयाँ', 'मूल्य', 'दाम', 'पर्छ', 'पर्ने',
+]);
+
 /** Minimal catalog view the parser needs (one row per sellable colour variant). */
 export interface VoiceCatalogVariant {
   id: number;
@@ -288,7 +300,23 @@ export function parseOrderSpeech(transcript: string, catalog: VoiceCatalogVarian
     const order = verbLast
       ? [hitIndex - 1, hitIndex + len, hitIndex - 2, hitIndex + len + 1]
       : [hitIndex + len, hitIndex - 1, hitIndex + len + 1, hitIndex - 2];
+    // A pause (comma) between the number and "paid" means the number belongs to something else.
+    const pauseBetween = (k: number) => {
+      const [a, b] = k < hitIndex ? [k, hitIndex] : [hitIndex + len - 1, k];
+      for (let i = a + 1; i < b; i++) if (L.SEPARATORS.includes(tokens[i])) return true;
+      return false;
+    };
     for (const k of order) {
+      if (isNum(tokens[k]) && !used.has(k) && Number(tokens[k]) > 0 && !pauseBetween(k)) {
+        used.add(k);
+        return Number(tokens[k]);
+      }
+    }
+    // "एक हजार इसेवा बाट तिरेको" / "2000 by esewa paid": skip only the payment method and joining
+    // words between the amount and the verb – never other words, so an item's price isn't taken.
+    for (const step of verbLast ? [-1, 1] : [1, -1]) {
+      let k = step < 0 ? hitIndex - 1 : hitIndex + len;
+      while (tokens[k] !== undefined && PAY_FILLER.has(tokens[k])) k += step;
       if (isNum(tokens[k]) && !used.has(k) && Number(tokens[k]) > 0) {
         used.add(k);
         return Number(tokens[k]);
@@ -340,6 +368,22 @@ export function parseOrderSpeech(transcript: string, catalog: VoiceCatalogVarian
   }
   cur.end = tokens.length;
   segments.push(cur);
+  // People pause between the item and its price or size ("two black kurta, 2500 each" – the
+  // pause becomes a comma). A part that is only a price / quantity / size belongs to the item before it.
+  for (let s = 1; s < segments.length; s++) {
+    const seg = segments[s];
+    const prev = segments[s - 1];
+    if (seg.matches.length || !prev.matches.length) continue;
+    const rest: number[] = [];
+    for (let i = seg.start; i < seg.end; i++) if (!used.has(i)) rest.push(i);
+    const afterSizeWord = (i: number) => L.SIZE_WORDS.some((w) => tokenMatches(tokens[i - 1] ?? '', w, true));
+    const onlyDetails = rest.every((i) => isNum(tokens[i]) || ITEM_DETAIL_WORDS.has(tokens[i]) || L.SIZE_WORDS.some((w) => tokenMatches(tokens[i], w, true)) || afterSizeWord(i));
+    if (rest.length && onlyDetails && rest.some((i) => isNum(tokens[i]) || afterSizeWord(i))) {
+      prev.end = seg.end;
+      segments.splice(s, 1);
+      s--;
+    }
+  }
 
   const itemSegs = segments.filter((s) => s.matches.length);
   const byId = new Map(catalog.map((v) => [v.id, v]));

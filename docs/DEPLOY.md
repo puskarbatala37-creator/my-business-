@@ -41,8 +41,9 @@ long as they give the app a **persistent disk** – without one, all orders are 
 8. Open your `https://` address on your phone, enter that setup code, and create Teza's owner account.
 9. In Slay: **More → Setup check**. "Secure web address (https)" should now say **Set up**.
 
-**Backups:** everything lives on the `/data` volume. Use Railway's volume backups (volume → *Backups*),
-or ask for an export/backup feature if you want one inside Slay.
+**Backups:** Slay copies its database every day and reminds owners to save a copy off the server
+(More → Backups). Also turn on Railway's volume backups if your plan offers them (open the volume →
+*Backups*, daily) – they include photos. See [BACKUPS.md](BACKUPS.md).
 
 **Updating later:** every push to the chosen branch redeploys automatically; the volume (data) is kept.
 

@@ -185,7 +185,7 @@ export class CatalogService {
       const v = this.getVariant(id);
       const delta = input.set !== undefined ? input.set - v.stock : (input.delta ?? 0);
       if (delta === 0) return { v, delta };
-      if (v.stock + delta < 0) throw conflict(`Only ${v.stock} in stock`);
+      if (v.stock + delta < 0) throw conflict(`There are only ${v.stock} in stock, so you can’t remove ${-delta}.`);
       this.db.prepare('UPDATE variants SET stock = stock + ?, updated_at = ? WHERE id = ?').run(delta, new Date().toISOString(), id);
       this.recordMovement(id, delta, input.reason, user.id, null, null, input.note ?? null);
       return { v, delta };
@@ -216,7 +216,9 @@ export class CatalogService {
     if (res.changes === 0) {
       const v = this.getVariant(variantId);
       throw conflict(
-        v.stock === 0 ? `${v.product_name} (${v.color}) is out of stock` : `Only ${v.stock} left of ${v.product_name} (${v.color})`,
+        v.stock === 0
+          ? `${v.product_name} (${v.color}) is out of stock. Remove it from the order, or add stock first under Stock.`
+          : `Only ${v.stock} left of ${v.product_name} (${v.color}). Lower the quantity, or add stock first under Stock.`,
         'out_of_stock',
         { variant_id: variantId, available: v.stock },
       );

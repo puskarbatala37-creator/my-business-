@@ -67,6 +67,36 @@ describe('Nepali voice order parsing', () => {
     expect(d.delivery_due_date).toBe('2026-10-11');
   });
 
+  it('finds the amount paid when the payment method comes between ("एक हजार इसेवा बाट तिरेको")', () => {
+    const ne = parseOrderSpeech('कालो कुर्था दुई वटा, पच्चीस सय, एक हजार इसेवा बाट तिरेको, भोलि डेलिभरी', catalog, TODAY);
+    expect(ne.payment).toMatchObject({ method: 'esewa', amount: 1000 });
+    expect(ne.items[0]).toMatchObject({ quantity: 2, unit_price: 2500 });
+    const en = parseOrderSpeech('two black kurta 2500 each, 1500 by esewa paid', catalog, TODAY);
+    expect(en.payment).toMatchObject({ method: 'esewa', amount: 1500 });
+    expect(en.items[0]).toMatchObject({ quantity: 2, unit_price: 2500 });
+    // After a pause, "paid by eSewa" doesn't take the item's price as the payment.
+    const full = parseOrderSpeech('कालो कुर्था एउटा २५००, इसेवा बाट तिरेको', catalog, TODAY);
+    expect(full.payment).toMatchObject({ status: 'paid', method: 'esewa' });
+    expect(full.payment.amount).toBeUndefined();
+    expect(full.items[0]).toMatchObject({ unit_price: 2500 });
+  });
+
+  it('keeps the price and size with the item when there is a pause (comma) in between', () => {
+    const a = parseOrderSpeech('कालो कुर्था दुई वटा, पच्चीस सय', catalog, TODAY);
+    expect(a.items[0]).toMatchObject({ variant_id: 5, quantity: 2, unit_price: 2500 });
+    const b = parseOrderSpeech('two black kurta size M, 2500 each, paid 2000 by eSewa', catalog, TODAY);
+    expect(b.items[0]).toMatchObject({ quantity: 2, unit_price: 2500, size: 'M' });
+    expect(b.payment).toMatchObject({ method: 'esewa', amount: 2000 });
+    const c = parseOrderSpeech('black kurta, size M, 2500, paid by esewa', catalog, TODAY);
+    expect(c.items[0]).toMatchObject({ quantity: 1, unit_price: 2500, size: 'M' });
+    expect(c.payment).toMatchObject({ status: 'paid', method: 'esewa' });
+    expect(c.payment.amount).toBeUndefined();
+    // A part that says something else (an advance, a phone number) is not mistaken for the price.
+    const d = parseOrderSpeech('black kurta, 1000 advance, 1500 baki', catalog, TODAY);
+    expect(d.items[0].unit_price).toBe(1800);
+    expect(d.payment).toMatchObject({ status: 'partial', amount: 1000 });
+  });
+
   it('works out partial payment from "paid X, Y remaining"', () => {
     const d = parseOrderSpeech('कालो कुर्था २००० तिर्यो १६०० बाँकी शुक्रबार डेलिभरी', catalog, TODAY);
     expect(d.payment).toMatchObject({ status: 'partial', amount: 2000 });

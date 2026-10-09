@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { useCatalog } from '../../components/VariantPicker';
-import { MoneyInput, PhotoInput, Spinner, StockBadge, TopBar, useToast } from '../../components/ui';
+import { Loading, MoneyInput, PhotoInput, Spinner, StockBadge, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 
 interface VariantForm {
@@ -114,6 +114,8 @@ export function ProductFormPage() {
     }
   }
 
+  const missing = !!data && editing && !loaded && !data.categories.some((c) => c.products.some((x) => x.id === Number(id)));
+  if (missing) return <Loading error={{ code: 'missing' }} what="product" />;
   if (!data || !loaded) return <Spinner />;
 
   return (

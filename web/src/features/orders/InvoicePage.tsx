@@ -5,7 +5,7 @@ import { useParams } from 'react-router-dom';
 import { BrandMark } from '../../components/BrandMark';
 import { CopySheet } from '../../components/CopySheet';
 import { Icon } from '../../components/Icon';
-import { Sheet, Spinner, TopBar, useToast } from '../../components/ui';
+import { Loading, Sheet, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { longDate, npr } from '../../lib/format';
 import { invoicePdf, invoicePng } from '../../lib/invoiceFile';
@@ -72,7 +72,7 @@ export function InvoicePage() {
   const [manualCopy, setManualCopy] = useState<string | null>(null);
   const o = q.data;
   const fileFor = useInvoiceFiles(o);
-  if (!o) return <Spinner />;
+  if (!o) return <Loading error={q.error} retry={q.refetch} what="order" />;
 
   const run = async (fn: () => Promise<void>) => {
     setBusy(true);

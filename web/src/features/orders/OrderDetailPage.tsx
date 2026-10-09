@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CopySheet } from '../../components/CopySheet';
 import { Icon } from '../../components/Icon';
-import { FulfillmentBadge, MoneyInput, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar, useToast } from '../../components/ui';
+import { FulfillmentBadge, Loading, MoneyInput, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { dateTime, longDate, npr, relativeDue, shortDate } from '../../lib/format';
 import { shareOrCopy } from '../../lib/share';
@@ -44,7 +44,7 @@ export function OrderDetailPage() {
   });
 
   const o = q.data;
-  if (!o) return <Spinner />;
+  if (!o) return <Loading error={q.error} retry={q.refetch} what="order" />;
   const active = o.state === 'active';
   const today = todayInBusinessTz();
 

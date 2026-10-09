@@ -2,10 +2,11 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { HeaderActions } from '../../components/Layout';
-import { Spinner, StockBadge, Thumb, TopBar } from '../../components/ui';
+import { Loading, StockBadge, Thumb, TopBar } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { monthLabel, npr, relativeDue, shortDate } from '../../lib/format';
+import { daysSinceDownload, useBackups } from '../more/BackupsPage';
 
 interface Period {
   orders: number;
@@ -71,12 +72,24 @@ export function DashboardPage() {
   const { me } = useAuth();
   const q = useQuery({ queryKey: ['dashboard'], queryFn: () => api.get<Summary>('/api/dashboard') });
   const d = q.data;
+  // Owners: a weekly nudge to keep a copy of the data off the server.
+  const backups = useBackups();
+  const sinceBackup = daysSinceDownload(backups.data);
+  const backupDue = !!backups.data && (sinceBackup === null || sinceBackup > 7);
   return (
     <>
       <TopBar title={`Hi, ${me?.user.displayName}`} actions={<HeaderActions />} />
       <main className="page">
+        {backupDue && (
+          <Link to="/more/backups" className="alert-banner warning" style={{ marginTop: 12 }}>
+            <span>
+              <strong>Save this week’s backup.</strong> {sinceBackup === null ? 'No copy has been saved off the server yet.' : `The last one was saved ${sinceBackup} days ago.`} Tap here –
+              it takes a few seconds.
+            </span>
+          </Link>
+        )}
         {!d ? (
-          <Spinner />
+          <Loading error={q.error} retry={q.refetch} what="sales summary" />
         ) : (
           <>
             <div className="section">

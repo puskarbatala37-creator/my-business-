@@ -133,7 +133,14 @@ export function VoiceInput({ onText, busy }: { onText: (text: string) => void; b
       } else if (e.error === 'not-allowed') {
         toast('Microphone permission is blocked. Allow it in the browser settings.', true);
       } else if (e.error !== 'no-speech' && e.error !== 'aborted') {
-        toast(`Voice error: ${e.error}`, true);
+        toast(
+          e.error === 'network'
+            ? 'Voice needs an internet connection. Check your signal and try again, or type the order.'
+            : e.error === 'audio-capture'
+              ? 'No microphone found. Check that nothing else is using it, or type the order.'
+              : 'Voice stopped unexpectedly. Tap the mic to try again, or type the order.',
+          true,
+        );
       }
     };
     rec.onend = () => {

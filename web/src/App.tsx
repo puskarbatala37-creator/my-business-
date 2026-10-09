@@ -11,6 +11,8 @@ import { DashboardPage } from './features/dashboard/DashboardPage';
 import { MorePage } from './features/more/MorePage';
 import { NotificationsPage } from './features/more/NotificationsPage';
 import { SetupCheckPage } from './features/more/SetupCheckPage';
+import { BackupsPage } from './features/more/BackupsPage';
+import { GuidePage } from './features/more/GuidePage';
 import { SecurityPage } from './features/more/SecurityPage';
 import { TeamPage } from './features/more/TeamPage';
 import { InvoicePage } from './features/orders/InvoicePage';
@@ -77,6 +79,8 @@ export function App() {
         <Route path="more/team" element={<TeamPage />} />
         <Route path="more/notifications" element={<NotificationsPage />} />
         <Route path="more/setup" element={<SetupCheckPage />} />
+        <Route path="more/backups" element={<BackupsPage />} />
+        <Route path="more/guide" element={<GuidePage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

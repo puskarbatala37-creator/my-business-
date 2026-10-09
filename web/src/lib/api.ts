@@ -28,10 +28,16 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   }
   reportNetwork(true);
   const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
+  let data: any = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    // Not a reply from Slay itself – usually the host while Slay restarts or updates.
+    throw new ApiError(res.status || 503, 'Slay’s server isn’t answering right now. Wait a minute and try again.', 'unavailable');
+  }
   if (!res.ok) {
     if (res.status === 401 && !url.startsWith('/api/auth/login')) window.dispatchEvent(new Event('slay:unauthenticated'));
-    throw new ApiError(res.status, data?.error ?? `Request failed (${res.status})`, data?.code, data?.details);
+    throw new ApiError(res.status, data?.error ?? 'Something went wrong. Please try again.', data?.code, data?.details);
   }
   return data as T;
 }

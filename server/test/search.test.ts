@@ -29,7 +29,7 @@ describe('order history search', () => {
     const red = tree[0].products[0].variants[0].id;
     const noPlatform = await teza.post('/api/orders', { customer: { name: 'X' }, items: [{ variant_id: red, quantity: 1, unit_price: 1 }] });
     expect(noPlatform.status).toBe(400);
-    expect(noPlatform.body.error).toContain('choose where the order came from');
+    expect(noPlatform.body.error).toMatch(/choose where the order came from/i);
     expect((await teza.post('/api/orders', { customer: { name: 'X' }, platform: 'myspace', items: [{ variant_id: red, quantity: 1, unit_price: 1 }] })).status).toBe(400);
     const wa = (await teza.get('/api/orders?platform=whatsapp')).body.orders;
     expect(wa).toHaveLength(1);

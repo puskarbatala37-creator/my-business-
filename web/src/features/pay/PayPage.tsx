@@ -44,7 +44,7 @@ export function PayPage() {
               <div className="alert-banner warning">This link has expired. Please ask us for a new one.</div>
             ) : (
               <>
-                {result === 'failed' && <div className="alert-banner">The payment did not go through. You can try again.</div>}
+                {result === 'failed' && <div className="alert-banner">The payment didn’t go through, so you can try again. If money was taken from your eSewa account, don’t pay twice – it is confirmed automatically within a few minutes.</div>}
                 {result === 'pending' && <div className="alert-banner warning">We are confirming your payment with eSewa. This page will update shortly.</div>}
                 {p.checkout && (
                   <form ref={formRef} method="POST" action={p.checkout.action}>

@@ -38,8 +38,8 @@ export const voiceModule: AppModule = {
 
     r.post('/transcribe', upload.single('audio'), async (req, res) => {
       const { url, apiKey, model } = ctx.config.transcribe;
-      if (!apiKey) throw new HttpError(501, 'Server speech-to-text is not configured (set TRANSCRIBE_API_KEY).');
-      if (!req.file) throw badRequest('No audio received');
+      if (!apiKey) throw new HttpError(501, 'Voice in this language isn’t available on this phone yet. Type the order instead, or use the keyboard’s mic button.');
+      if (!req.file) throw badRequest('Nothing was recorded. Tap the mic and speak again.');
       const form = new FormData();
       const type = req.file.mimetype || 'audio/webm';
       const ext = type.includes('mp4') || type.includes('m4a') ? 'm4a' : type.includes('ogg') ? 'ogg' : type.includes('wav') ? 'wav' : 'webm';
@@ -50,7 +50,10 @@ export const voiceModule: AppModule = {
       if (language !== 'auto') form.append('language', language);
       form.append('prompt', 'Order: रातो साडी दुई वटा, 3500 rupees, एडभान्स 1000 eSewa, भोलि डेलिभरी, black kurta, paid, cash on delivery.');
       const resp = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form, signal: AbortSignal.timeout(60_000) });
-      if (!resp.ok) throw new HttpError(502, `Speech-to-text failed (${resp.status})`);
+      if (!resp.ok) {
+        console.warn('[voice] speech-to-text failed:', resp.status);
+        throw new HttpError(502, 'Couldn’t understand the recording. Try again, or type the order instead.');
+      }
       const data = (await resp.json()) as { text?: string };
       res.json({ text: data.text ?? '' });
     });

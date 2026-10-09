@@ -67,7 +67,9 @@ cd server && NODE_ENV=production APP_URL=https://your-domain node dist/index.js
 
 Or use Docker: `docker build -t slay . && docker run -p 3000:3000 -v slay-data:/data -e APP_URL=https://your-domain slay`.
 
-Any host that runs Node or Docker and keeps a **persistent disk** will work: a small VPS, Railway, Render or Fly.io with a volume. Put it behind HTTPS, which these hosts usually provide. All data lives in `DATA_DIR`: the SQLite database plus uploaded photos. **Back up that folder.**
+Any host that runs Node or Docker and keeps a **persistent disk** will work: a small VPS, Railway, Render or Fly.io with a volume. Put it behind HTTPS, which these hosts usually provide. All data lives in `DATA_DIR`: the SQLite database plus uploaded photos.
+
+**Backups:** Slay copies the database every day (last 14 days kept on the server), owners save an off-server copy under **More → Backups** (with a weekly reminder), and restoring is dropping a backup into `DATA_DIR/restore/` and restarting. Also turn on the host's volume backups, which include photos. Details: [docs/BACKUPS.md](docs/BACKUPS.md).
 See `.env.example` for every setting.
 
 Team members are normally managed in the app, and anyone locked out can use **Forgot password?**. If even that fails (no phone, lost phone), an owner can reset the password under Team, and the command line still works on the server: `node dist/cli/users.js create <email> "<Name>" owner <phone>`, or `node dist/cli/users.js password <email>`.
