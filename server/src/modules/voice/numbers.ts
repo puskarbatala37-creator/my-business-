@@ -49,7 +49,7 @@ export const COUNTER_WORDS = ['वटा', 'ओटा', 'थान', 'पिस'
 /** Words that are numbers only when followed by a counter/multiplier ("छ" also means "is"). */
 const AMBIGUOUS = new Set(['छ', 'a', 'an', 'नौ', 'chha', 'tin', 'sat', 'say', 'char', 'ek', 'टु', 'एट']);
 
-function wordValue(tok: string): number | undefined {
+export function wordValue(tok: string): number | undefined {
   if (/^\d+(\.\d+)?$/.test(tok)) return Number(tok);
   return NE_WORDS[tok] ?? EN_WORDS[tok.toLowerCase()] ?? ROMAN_NE[tok.toLowerCase()];
 }

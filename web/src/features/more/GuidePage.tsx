@@ -69,28 +69,44 @@ export function GuidePage() {
         </Topic>
 
         <Topic title="Use your voice instead of typing">
+          <p>
+            Every box has a small pink <b>mic</b> button next to its name. Tap it, say <b>just that one thing</b>, and Slay fills in only that box.
+          </p>
           <ol>
             <li>
-              Tap the pink <b>+</b>. The voice box is at the top.
+              Tap the mic next to the box – for example <b>Delivery due</b>. The first time, your phone asks to use the microphone – tap <b>Allow</b>.
             </li>
-            <li>
-              Choose <b>नेपाली</b> or <b>English</b>.
-            </li>
-            <li>
-              Tap the round <b>mic</b> button and say the order the way you’d tell a friend. The first time, your phone asks to use the microphone – tap{' '}
-              <b>Allow</b>.
-            </li>
-            <li>
-              Tap the mic again to stop. Slay fills in the form for you.
-            </li>
-            <li>
-              <b>Check everything</b>, fix anything it misheard, then tap <b>Save order</b>.
-            </li>
+            <li>Say the value, then stop talking. A bar at the bottom shows what Slay heard.</li>
+            <li>The box fills in, and a message shows what was filled – e.g. “Delivery date: Sat 10 Oct 2026”.</li>
           </ol>
-          <p className="small">You can say, for example:</p>
-          <blockquote>“कालो कुर्ता दुई वटा, पच्चीस सय, आधा पेड इसेवा, भोलि डेलिभरी, टिकटक बाट, नाम सीता”</blockquote>
-          <blockquote>“two black kurta size 42, 2500 each, paid 2000 by eSewa, delivery tomorrow, from Instagram”</blockquote>
-          <Tip>Speak in a quiet place. You can also type the same sentence into the box and tap <b>Fill the form</b>.</Tip>
+          <p className="small">What to say in each box:</p>
+          <ul>
+            <li>
+              <b>Order came from:</b> “TikTok”, “इन्स्टाग्राम”
+            </li>
+            <li>
+              <b>Phone:</b> the digits one by one – “nine eight four one…”, “नौ आठ चार एक…”
+            </li>
+            <li>
+              <b>Product</b> (mic next to <b>Add item</b>): the name and colour – “black cotton kurta”, “रातो बनारसी साडी”
+            </li>
+            <li>
+              <b>Size:</b> “42”, “बयालीस”, “medium”
+            </li>
+            <li>
+              <b>Price, discount, amount paid:</b> “2500”, “पच्चीस सय”, “two thousand five hundred”
+            </li>
+            <li>
+              <b>Delivery due / order date:</b> “October 10”, “अक्टोबर १०”, “tomorrow”, “भोलि”, “next Friday”
+            </li>
+            <li>
+              <b>Payment (mic next to Payment):</b> “paid”, “partial”, “cash on delivery”; and the method – “cash”, “इसेवा”
+            </li>
+          </ul>
+          <Tip>
+            Speaking Nepali or English? Switch with the <b>नेपाली / English</b> buttons in the bar while it’s listening – Slay remembers your choice. Dates
+            are in the English calendar: say “October 10”, not “असोज २४”.
+          </Tip>
         </Topic>
 
         <Topic title="Update stock">

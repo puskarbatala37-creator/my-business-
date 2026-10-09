@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { FieldHead, MicButton } from '../../components/FieldVoice';
 import { Icon } from '../../components/Icon';
 import { HeaderActions } from '../../components/Layout';
 import { useCatalog } from '../../components/VariantPicker';
@@ -132,7 +133,9 @@ function AdjustSheet({ v, p, onClose }: { v: Variant; p: Product; onClose: () =>
           ))}
         </div>
         <label className="field">
-          Set exact count (after counting)
+          <FieldHead text="Set exact count (after counting)">
+            <MicButton label="Count" kind="number" onValue={setCount} />
+          </FieldHead>
           <input className="input num" inputMode="numeric" value={count} onChange={(e) => setCount(e.target.value === '' ? '' : Number(e.target.value.replace(/\D/g, '')))} />
         </label>
         <button className="btn primary block" disabled={busy || count === '' || count === v.stock} onClick={() => save({ set: count, reason: 'manual', note: 'Stock count' })}>

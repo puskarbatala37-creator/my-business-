@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CopySheet } from '../../components/CopySheet';
 import { Icon } from '../../components/Icon';
+import { FieldHead, MicButton } from '../../components/FieldVoice';
 import { FulfillmentBadge, Loading, MoneyInput, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { dateTime, longDate, npr, relativeDue, shortDate } from '../../lib/format';
@@ -318,15 +319,20 @@ function PaymentSheet({ balance, onClose, onSave }: { balance: number; onClose: 
     <Sheet title="Record payment" onClose={onClose}>
       <div className="stack">
         <label className="field">
-          Amount received (owed: {npr(balance)})
+          <FieldHead text={`Amount received (owed: ${npr(balance)})`}>
+            <MicButton label="Amount received" kind="money" onValue={setAmount} />
+          </FieldHead>
           <MoneyInput value={amount} onChange={setAmount} autoFocus />
         </label>
-        <div className="chips">
+        <div className="row" style={{ gap: 8 }}>
+        <MicButton label="Payment method" kind="payment_method" onValue={setMethod} />
+        <div className="chips grow">
           {PAYMENT_METHODS.map((m) => (
             <button key={m} className={`chip ${method === m ? 'on' : ''}`} onClick={() => setMethod(m)}>
               {PAYMENT_METHOD_LABELS[m]}
             </button>
           ))}
+        </div>
         </div>
         <button className="btn primary block" disabled={!amount} onClick={() => onSave(Number(amount), method)}>
           Save payment
@@ -342,7 +348,9 @@ function SendSheet({ initial, onClose, onSave }: { initial: string; onClose: () 
     <Sheet title="Mark as sent" onClose={onClose}>
       <div className="stack">
         <label className="field">
-          Delivery tracking number (optional)
+          <FieldHead text="Delivery tracking number (optional)">
+            <MicButton label="Tracking number" kind="tracking" onValue={setTracking} />
+          </FieldHead>
           <input className="input" autoFocus autoCapitalize="characters" value={tracking} onChange={(e) => setTracking(e.target.value)} />
         </label>
         <button className="btn primary block" onClick={() => onSave(tracking)}>

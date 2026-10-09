@@ -61,14 +61,14 @@ interface Match {
   variantIds: Set<number>;
 }
 
-const isNum = (t: string | undefined) => !!t && /^\d+(\.\d+)?$/.test(t);
+export const isNum = (t: string | undefined) => !!t && /^\d+(\.\d+)?$/.test(t);
 const lower = (s: string) => s.toLowerCase().trim();
-const splitWords = (s: string) => normalizeNumbers(lower(s)).split(/\s+/).filter(Boolean);
+export const splitWords = (s: string) => normalizeNumbers(lower(s)).split(/\s+/).filter(Boolean);
 const aliasList = (s: string) => s.split(/[,;\n]/).map((x) => lower(x)).filter(Boolean);
 const isDevanagari = (s: string) => /[ऀ-ॿ]/.test(s);
 
 /** Token equality that tolerates Nepali suffixes: "साडीको", "रातोमा", "साडीहरू". */
-function tokenMatches(token: string, term: string, last: boolean) {
+export function tokenMatches(token: string, term: string, last: boolean) {
   if (token === term) return true;
   if (last && isDevanagari(term) && term.length >= 2 && token.startsWith(term) && token.length - term.length <= 4) return true;
   if (last && !isDevanagari(term) && term.length >= 4 && (token === term + 's' || token === term + 'es')) return true;
@@ -85,7 +85,7 @@ function findPhrase(tokens: string[], phrase: string[], from = 0): number {
   return -1;
 }
 
-function findAny(tokens: string[], phrases: string[]): { index: number; length: number } | null {
+export function findAny(tokens: string[], phrases: string[]): { index: number; length: number } | null {
   let best: { index: number; length: number } | null = null;
   for (const p of phrases) {
     const words = splitWords(p);

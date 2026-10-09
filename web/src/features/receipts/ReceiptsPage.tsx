@@ -1,6 +1,7 @@
 import { addDays, todayInBusinessTz } from '@slay/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { FieldHead, MicButton } from '../../components/FieldVoice';
 import { Icon } from '../../components/Icon';
 import { HeaderActions } from '../../components/Layout';
 import { Empty, MoneyInput, Sheet, Spinner, TopBar, useToast } from '../../components/ui';
@@ -149,16 +150,22 @@ function ReceiptForm({ draft, onClose }: { draft: { photo: string; captured_at: 
         <img src={draft.photo} alt="Supplier bill" style={{ maxHeight: 260, objectFit: 'contain', borderRadius: 12, background: 'var(--surface-2)', width: '100%' }} />
         <div className="small muted">Captured {dateTime(draft.captured_at)}</div>
         <label className="field">
-          Supplier / shop
+          <FieldHead text="Supplier / shop">
+            <MicButton label="Supplier" kind="name" onValue={setSupplier} />
+          </FieldHead>
           <input className="input" value={supplier} onChange={(e) => setSupplier(e.target.value)} />
         </label>
         <label className="field">
-          Total amount
+          <FieldHead text="Total amount">
+            <MicButton label="Bill amount" kind="money" onValue={setAmount} />
+          </FieldHead>
           <MoneyInput value={amount} onChange={setAmount} />
         </label>
         <TypePicker value={category} onChange={setCategory} newType={newType} onNewType={setNewType} />
         <label className="field">
-          Notes
+          <FieldHead text="Notes">
+            <MicButton label="Note" kind="text" onValue={(t) => setNotes((n) => (n ? `${n} ${t}` : t))} />
+          </FieldHead>
           <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Details, e.g. 12 m Banarasi silk, 2 colours" />
         </label>
         <button className="btn primary block" disabled={busy}>
@@ -190,7 +197,9 @@ function TypePicker({ value, onChange, newType, onNewType }: { value: string; on
   };
   return (
     <div className="field-group">
-      <span id="bill-type-label">What was bought</span>
+      <FieldHead text={<span id="bill-type-label">What was bought</span>}>
+        <MicButton label="Bill type" kind="option" options={all.map((n) => ({ value: n, label: n }))} onValue={(n) => { onNewType(null); onChange(n); }} />
+      </FieldHead>
       <div className="chips" role="radiogroup" aria-labelledby="bill-type-label" style={{ flexWrap: 'wrap' }}>
         {all.map((name) => (
           <button type="button" key={name} role="radio" aria-checked={newType === null && value === name} className={`chip ${newType === null && value === name ? 'on' : ''}`} onClick={() => pick(name)}>

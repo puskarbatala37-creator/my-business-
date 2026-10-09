@@ -15,18 +15,16 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { useVariantIndex, VariantPicker, type PickedVariant } from '../../components/VariantPicker';
-import { VoiceInput } from '../../components/VoiceInput';
+import { FieldHead, MicButton } from '../../components/FieldVoice';
 import { MoneyInput, PaymentBadge, PhotoInput, Seg, Spinner, Stepper, TopBar, useToast } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
 import { npr, shortDate } from '../../lib/format';
-import type { Customer, HistoryRow, OrderDetail, OrderDraft } from '../../lib/types';
+import type { Customer, HistoryRow, OrderDetail } from '../../lib/types';
 
 interface Line {
   key: string;
   id?: number; // existing order_items.id (edit mode)
   variant_id: number | null;
-  candidates?: number[];
-  heard?: string;
   size: string;
   /** A size for each piece (e.g. two kurtas, 42 and 41); null = every piece is `size`. */
   sizes: string[] | null;
@@ -102,9 +100,6 @@ export function OrderFormPage() {
   const [loaded, setLoaded] = useState(!editing);
   const [picker, setPicker] = useState<{ lineKey?: string; only?: number[] } | null>(null);
   const [saving, setSaving] = useState(false);
-  const [parsing, setParsing] = useState(false);
-  const [voiceOpen, setVoiceOpen] = useState(!editing);
-  const [warnings, setWarnings] = useState<string[]>([]);
 
   // "New order for <customer>" from the customer screen.
   const location = useLocation();
@@ -158,7 +153,7 @@ export function OrderFormPage() {
   function addPicked(p: PickedVariant, lineKey?: string) {
     const sizes = p.product.sizes.split(',').map((s) => s.trim()).filter(Boolean);
     if (lineKey) {
-      setLine(lineKey, { variant_id: p.variant.id, candidates: undefined, photo: p.variant.photo, unit_price: form.items.find((l) => l.key === lineKey)?.unit_price || p.variant.price });
+      setLine(lineKey, { variant_id: p.variant.id, photo: p.variant.photo, unit_price: form.items.find((l) => l.key === lineKey)?.unit_price || p.variant.price });
     } else {
       setForm((f) => ({
         ...f,
@@ -168,52 +163,10 @@ export function OrderFormPage() {
     setPicker(null);
   }
 
-  async function applyVoice(text: string) {
-    if (!text) return;
-    setParsing(true);
-    try {
-      const d = await api.post<OrderDraft>('/api/voice/parse', { text });
-      setForm((f) => {
-        const next = { ...f, customer: { ...f.customer }, payment: { ...f.payment } };
-        if (d.customer.phone) next.customer.phone = d.customer.phone;
-        if (d.customer.name) next.customer.name = d.customer.name;
-        if (d.customer.address) next.customer.address = d.customer.address;
-        if (d.items.length) {
-          next.items = [
-            ...f.items,
-            ...d.items.map((it) => {
-              const v = it.variant_id ? index.get(it.variant_id) : undefined;
-              return {
-                key: newKey(),
-                variant_id: it.variant_id,
-                candidates: it.variant_id ? undefined : it.candidates,
-                heard: it.heard,
-                size: it.size,
-                sizes: null,
-                quantity: it.quantity,
-                unit_price: it.unit_price ?? v?.variant.price ?? '',
-                photo: v?.variant.photo ?? null,
-                reserved: 0,
-              } as Line;
-            }),
-          ];
-        }
-        if (d.platform) next.platform = d.platform;
-        if (d.payment.status) next.payment.status = d.payment.status;
-        if (d.payment.amount !== undefined) next.payment.amount = d.payment.amount;
-        if (d.payment.method) next.payment.method = d.payment.method;
-        if (d.delivery_due_date) next.delivery_due_date = d.delivery_due_date;
-        if (d.prep_time_days !== undefined) next.prep_time_days = d.prep_time_days;
-        if (d.delivery_charge !== undefined) next.delivery_charge = d.delivery_charge;
-        return next;
-      });
-      setWarnings(d.warnings);
-      toast(d.items.length ? `Filled ${d.items.length} item${d.items.length > 1 ? 's' : ''} – check and save` : 'Filled what I understood – check the form');
-    } catch (e) {
-      toast((e as Error).message, true);
-    } finally {
-      setParsing(false);
-    }
+  /** Voice picked a product (by its colour variant id) for a new or existing line. */
+  function voiceProduct(variantId: number, lineKey?: string) {
+    const p = index.get(variantId);
+    if (p) addPicked(p, lineKey);
   }
 
   async function save() {
@@ -270,31 +223,20 @@ export function OrderFormPage() {
       <TopBar
         title={editing ? `Edit ${existing.data?.invoice_no ?? ''}` : 'New order'}
         back
-        actions={
-          !editing && (
-            <button className={`icon-btn ${voiceOpen ? '' : ''}`} aria-label="Voice entry" onClick={() => setVoiceOpen((v) => !v)}>
-              <Icon name="mic" />
-            </button>
-          )
-        }
       />
       <main className="page stack" style={{ paddingTop: 12, paddingBottom: 90 }}>
-        {voiceOpen && <VoiceInput onText={applyVoice} busy={parsing} />}
-        {warnings.length > 0 && (
-          <div className="alert-banner warning">
-            <div>
-              {warnings.map((w) => (
-                <div key={w}>{w}</div>
-              ))}
-            </div>
-          </div>
-        )}
+        <div className="voice-hint small muted">
+          <Icon name="mic" size={16} /> Tap the mic next to any field and say just that – e.g. “October 10”, “42” or “black cotton kurta”.
+        </div>
 
         {/* Where the order came from – required */}
         <section className="card stack" id="order-source" aria-labelledby="order-source-title">
           <div className="row between">
             <h2 id="order-source-title">Order came from</h2>
-            {!form.platform && <span className="badge warn">Required</span>}
+            <span className="row" style={{ gap: 8 }}>
+              {!form.platform && <span className="badge warn">Required</span>}
+              <MicButton label="Order source" kind="platform" onValue={(v) => set('platform', v)} />
+            </span>
           </div>
           <div className="platform-picker" role="radiogroup" aria-labelledby="order-source-title">
             {PLATFORMS.map((p) => (
@@ -317,7 +259,9 @@ export function OrderFormPage() {
         <section className="card stack">
           <h2>Customer</h2>
           <label className="field">
-            Phone
+            <FieldHead text="Phone">
+              <MicButton label="Phone number" kind="phone" onValue={(v) => setCustomer({ phone: v, id: null })} />
+            </FieldHead>
             <input className="input" type="tel" inputMode="tel" autoComplete="off" placeholder="98XXXXXXXX" value={form.customer.phone} onChange={(e) => setCustomer({ phone: e.target.value, id: null })} />
           </label>
           {lookup.data?.customer && (
@@ -341,15 +285,21 @@ export function OrderFormPage() {
             </div>
           )}
           <label className="field">
-            Name
+            <FieldHead text="Name">
+              <MicButton label="Customer name" kind="name" onValue={(v) => setCustomer({ name: v })} />
+            </FieldHead>
             <input className="input" autoComplete="off" value={form.customer.name} onChange={(e) => setCustomer({ name: e.target.value })} />
           </label>
           <label className="field">
-            Delivery address
+            <FieldHead text="Delivery address">
+              <MicButton label="Delivery address" kind="text" onValue={(v) => setCustomer({ address: v })} />
+            </FieldHead>
             <input className="input" autoComplete="off" value={form.customer.address} onChange={(e) => setCustomer({ address: e.target.value })} />
           </label>
           <label className="field">
-            Social media name (TikTok, Facebook, Instagram or WhatsApp)
+            <FieldHead text="Social media name (TikTok, Facebook, Instagram or WhatsApp)">
+              <MicButton label="Social media name" kind="handle" onValue={(v) => setCustomer({ social_handle: v })} />
+            </FieldHead>
             <input className="input" autoCapitalize="none" autoComplete="off" value={form.customer.social_handle} onChange={(e) => setCustomer({ social_handle: e.target.value })} />
           </label>
         </section>
@@ -378,18 +328,23 @@ export function OrderFormPage() {
                         </div>
                       </>
                     ) : (
-                      <>
-                        <div className="small muted">Heard: “{l.heard}”</div>
-                        <button type="button" className="btn sm primary" style={{ marginTop: 4 }} onClick={() => setPicker({ lineKey: l.key, only: l.candidates?.length ? l.candidates : undefined })}>
-                          Choose product &amp; colour
-                        </button>
-                      </>
-                    )}
-                    {v && (
-                      <button type="button" className="btn ghost sm" style={{ padding: 0, minHeight: 28 }} onClick={() => setPicker({ lineKey: l.key })}>
-                        Change
+                      <button type="button" className="btn sm primary" style={{ marginTop: 4 }} onClick={() => setPicker({ lineKey: l.key })}>
+                        Choose product &amp; colour
                       </button>
                     )}
+                    <div className="row" style={{ gap: 6, marginTop: 2 }}>
+                      {v && (
+                        <button type="button" className="btn ghost sm" style={{ padding: 0, minHeight: 28 }} onClick={() => setPicker({ lineKey: l.key })}>
+                          Change
+                        </button>
+                      )}
+                      <MicButton
+                        label="Product"
+                        kind="product"
+                        onValue={(id) => voiceProduct(id, l.key)}
+                        onCandidates={(ids) => setPicker({ lineKey: l.key, only: ids })}
+                      />
+                    </div>
                   </div>
                   <button type="button" className="icon-btn" aria-label="Remove item" onClick={() => setForm((f) => ({ ...f, items: f.items.filter((x) => x.key !== l.key) }))}>
                     <Icon name="trash" size={18} />
@@ -397,24 +352,30 @@ export function OrderFormPage() {
                 </div>
                 <div className="grid-3" style={{ alignItems: 'end' }}>
                   <label className="field">
-                    Qty
+                    <FieldHead text="Qty">
+                      <MicButton label="Quantity" kind="number" onValue={(n) => setQuantity(l, Math.max(1, Math.min(999, n)))} />
+                    </FieldHead>
                     <Stepper value={l.quantity} onChange={(n) => setQuantity(l, n)} />
                   </label>
                   {l.sizes ? (
                     <div className="field-group">
-                      Size
+                      <FieldHead text="Size" />
                       <div className="input" style={{ display: 'flex', alignItems: 'center', color: 'var(--text-2)', background: 'var(--surface-2)' }}>
                         {sizeSummary(l.sizes) || 'Each piece ↓'}
                       </div>
                     </div>
                   ) : (
                     <label className="field">
-                      Size
+                      <FieldHead text="Size">
+                        <MicButton label="Size" kind="size" options={sizes} onValue={(size) => setLine(l.key, { size })} />
+                      </FieldHead>
                       <SizeInput sizes={sizes} value={l.size} onChange={(size) => setLine(l.key, { size })} />
                     </label>
                   )}
                   <label className="field">
-                    Price each
+                    <FieldHead text="Price each">
+                      <MicButton label="Price" kind="money" onValue={(n) => setLine(l.key, { unit_price: n })} />
+                    </FieldHead>
                     <MoneyInput value={l.unit_price} onChange={(n) => setLine(l.key, { unit_price: n })} />
                   </label>
                 </div>
@@ -422,7 +383,14 @@ export function OrderFormPage() {
                   <div className="piece-sizes">
                     {l.sizes.map((s, i) => (
                       <label key={i} className="field">
-                        Piece {i + 1}
+                        <FieldHead text={`Piece ${i + 1}`}>
+                          <MicButton
+                            label={`Size of piece ${i + 1}`}
+                            kind="size"
+                            options={sizes}
+                            onValue={(size) => setLine(l.key, { sizes: l.sizes!.map((x, j) => (j === i ? size : x)) })}
+                          />
+                        </FieldHead>
                         <SizeInput
                           sizes={sizes}
                           value={s}
@@ -447,9 +415,12 @@ export function OrderFormPage() {
               </div>
             );
           })}
-          <button type="button" className="btn block" onClick={() => setPicker({})}>
-            <Icon name="plus" size={18} /> Add item
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            <button type="button" className="btn grow" onClick={() => setPicker({})}>
+              <Icon name="plus" size={18} /> Add item
+            </button>
+            <MicButton label="Product to add" kind="product" onValue={(id) => voiceProduct(id)} onCandidates={(ids) => setPicker({ only: ids })} />
+          </div>
         </section>
 
         {/* Delivery */}
@@ -457,35 +428,50 @@ export function OrderFormPage() {
           <h2>Delivery</h2>
           <div className="grid-2">
             <label className="field">
-              Delivery due
+              <FieldHead text="Delivery due">
+                <MicButton label="Delivery date" kind="date" prefer="future" onValue={(d) => set('delivery_due_date', d)} />
+              </FieldHead>
               <input className="input" type="date" value={form.delivery_due_date} onChange={(e) => set('delivery_due_date', e.target.value)} />
             </label>
             <label className="field">
-              Prep time (days)
+              <FieldHead text="Prep time (days)">
+                <MicButton label="Prep time in days" kind="number" onValue={(n) => set('prep_time_days', n)} />
+              </FieldHead>
               <input className="input" inputMode="numeric" value={form.prep_time_days} onChange={(e) => set('prep_time_days', e.target.value === '' ? '' : Number(e.target.value.replace(/\D/g, '')))} />
             </label>
             <label className="field">
-              Delivery charge
+              <FieldHead text="Delivery charge">
+                <MicButton label="Delivery charge" kind="money" onValue={(n) => set('delivery_charge', n)} />
+              </FieldHead>
               <MoneyInput value={form.delivery_charge} onChange={(n) => set('delivery_charge', n)} />
             </label>
             <label className="field">
-              Discount
+              <FieldHead text="Discount">
+                <MicButton label="Discount" kind="money" onValue={(n) => set('discount', n)} />
+              </FieldHead>
               <MoneyInput value={form.discount} onChange={(n) => set('discount', n)} />
             </label>
           </div>
           <label className="field">
-            Tracking number
+            <FieldHead text="Tracking number">
+              <MicButton label="Tracking number" kind="tracking" onValue={(t) => set('tracking_number', t)} />
+            </FieldHead>
             <input className="input" autoCapitalize="characters" value={form.tracking_number} onChange={(e) => set('tracking_number', e.target.value)} />
           </label>
           <label className="field">
-            Order date
+            <FieldHead text="Order date">
+              <MicButton label="Order date" kind="date" prefer="past" onValue={(d) => set('order_date', d)} />
+            </FieldHead>
             <input className="input" type="date" value={form.order_date} onChange={(e) => set('order_date', e.target.value)} />
           </label>
         </section>
 
         {/* Payment */}
         <section className="card stack">
-          <h2>Payment</h2>
+          <div className="section-head">
+            <h2>Payment</h2>
+            {!editing && <MicButton label="Payment status" kind="payment_status" onValue={(st) => setForm((f) => ({ ...f, payment: { ...f.payment, status: st } }))} />}
+          </div>
           {editing ? (
             <div className="small muted">
               <PaymentBadge status={existing.data!.payment_status} balance={existing.data!.balance_due} /> · Record payments from the order screen.
@@ -503,17 +489,22 @@ export function OrderFormPage() {
               />
               {form.payment.status === 'partial' && (
                 <label className="field">
-                  Amount paid now
+                  <FieldHead text="Amount paid now">
+                    <MicButton label="Amount paid" kind="money" onValue={(n) => setForm((f) => ({ ...f, payment: { ...f.payment, amount: n } }))} />
+                  </FieldHead>
                   <MoneyInput value={form.payment.amount} onChange={(n) => set('payment', { ...form.payment, amount: n })} />
                 </label>
               )}
               {form.payment.status !== 'unpaid' && (
-                <div className="chips">
+                <div className="row" style={{ gap: 8, alignItems: 'center' }}>
+                <MicButton label="Payment method" kind="payment_method" onValue={(m) => setForm((f) => ({ ...f, payment: { ...f.payment, method: m } }))} />
+                <div className="chips grow">
                   {PAYMENT_METHODS.map((m) => (
                     <button type="button" key={m} className={`chip ${form.payment.method === m ? 'on' : ''}`} onClick={() => set('payment', { ...form.payment, method: m })}>
                       {PAYMENT_METHOD_LABELS[m]}
                     </button>
                   ))}
+                </div>
                 </div>
               )}
             </>
@@ -548,7 +539,9 @@ export function OrderFormPage() {
 
         <section className="card stack">
           <label className="field">
-            Notes / custom requests
+            <FieldHead text="Notes / custom requests">
+              <MicButton label="Note" kind="text" onValue={(t) => setForm((f) => ({ ...f, notes: f.notes ? `${f.notes} ${t}` : t }))} />
+            </FieldHead>
             <textarea className="input" value={form.notes} onChange={(e) => set('notes', e.target.value)} placeholder="e.g. fall & pico, blouse stitching, gift wrap" />
           </label>
         </section>

@@ -4,7 +4,8 @@ import multer from 'multer';
 import { z } from 'zod';
 import type { AppContext, AppModule } from '../../core/context.js';
 import { badRequest, HttpError, parse } from '../../core/http.js';
-import { parseOrderSpeech, type VoiceCatalogVariant } from './parser.js';
+import { FIELD_KINDS, interpretField } from './field.js';
+import { type VoiceCatalogVariant } from './parser.js';
 
 export function voiceCatalog(ctx: AppContext): VoiceCatalogVariant[] {
   return ctx.db
@@ -21,7 +22,7 @@ export function voiceCatalog(ctx: AppContext): VoiceCatalogVariant[] {
  * Voice entry. The phone's own speech recognition (Chrome on Android supports
  * Nepali, "ne-NP") produces text in the browser; iPhones and other browsers can
  * instead upload the recording to /transcribe, which uses a Whisper-compatible
- * speech-to-text API (TRANSCRIBE_API_KEY). Either way the text goes to /parse.
+ * speech-to-text API (TRANSCRIBE_API_KEY). Either way the words for one field go to /field.
  */
 export const voiceModule: AppModule = {
   name: 'voice',
@@ -31,9 +32,23 @@ export const voiceModule: AppModule = {
 
     r.get('/config', (_req, res) => res.json({ serverTranscription: !!ctx.config.transcribe.apiKey }));
 
-    r.post('/parse', (req, res) => {
-      const b = parse(z.object({ text: z.string().min(1).max(5000) }), req.body);
-      res.json(parseOrderSpeech(b.text, voiceCatalog(ctx), todayInBusinessTz()));
+    // One spoken value for one field (see field.ts).
+    r.post('/field', (req, res) => {
+      const b = parse(
+        z.object({
+          kind: z.enum(FIELD_KINDS),
+          text: z.string().max(500),
+          options: z.array(z.object({ value: z.string().max(100), label: z.string().max(100) })).max(100).optional(),
+          prefer: z.enum(['future', 'past']).optional(),
+        }),
+        req.body,
+      );
+      const categories = ctx.db.prepare('SELECT id, name, voice_aliases FROM categories ORDER BY sort_order, name').all() as {
+        id: number;
+        name: string;
+        voice_aliases: string;
+      }[];
+      res.json(interpretField(b, { today: todayInBusinessTz(), catalog: voiceCatalog(ctx), categories }));
     });
 
     r.post('/transcribe', upload.single('audio'), async (req, res) => {
@@ -48,7 +63,7 @@ export const voiceModule: AppModule = {
       // "auto" lets the model detect Nepali, English or a mix of both.
       const language = String(req.body?.language || 'auto').slice(0, 5);
       if (language !== 'auto') form.append('language', language);
-      form.append('prompt', 'Order: रातो साडी दुई वटा, 3500 rupees, एडभान्स 1000 eSewa, भोलि डेलिभरी, black kurta, paid, cash on delivery.');
+      form.append('prompt', 'रातो साडी, black kurta, 3500, अक्टोबर १०, भोलि, 42, medium, eSewa, cash on delivery.');
       const resp = await fetch(url, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form, signal: AbortSignal.timeout(60_000) });
       if (!resp.ok) {
         console.warn('[voice] speech-to-text failed:', resp.status);

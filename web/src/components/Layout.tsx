@@ -1,6 +1,6 @@
 import { LIVE_EVENTS } from '@slay/shared';
 import { useQuery } from '@tanstack/react-query';
-import { createContext, useContext, useLayoutEffect, useRef, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate, useNavigationType, type Location } from 'react-router-dom';
 import { api } from '../lib/api';
 import { useAuth } from '../lib/auth';
@@ -9,6 +9,7 @@ import type { Alert } from '../lib/types';
 import { BiometricOffer } from './BiometricOffer';
 import { Icon } from './Icon';
 import { NotificationOffer } from './NotificationOffer';
+import { cancelVoice, ListeningBar } from './FieldVoice';
 import { useToast } from './ui';
 
 const LiveCtx = createContext(false);
@@ -28,12 +29,15 @@ export function Layout() {
     else if (e.type === LIVE_EVENTS.payment && e.message) toast(e.message);
   });
   const { location, direction } = useScreenTransition();
+  // Leaving a screen stops any voice listening for its fields.
+  useEffect(() => cancelVoice, [location.pathname]);
   return (
     <LiveCtx.Provider value={connected}>
       <div className="app">
         <div key={location.pathname} className={`screen screen-${direction}`}>
           <Outlet />
         </div>
+        <ListeningBar />
         <BiometricOffer />
         <NotificationOffer />
         <nav className="bottom-nav no-print" aria-label="Main">

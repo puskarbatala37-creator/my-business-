@@ -179,24 +179,3 @@ export interface Alert {
   read: boolean;
 }
 
-export interface DraftItem {
-  variant_id: number | null;
-  label: string;
-  quantity: number;
-  size: string;
-  unit_price: number | null;
-  candidates: number[];
-  heard: string;
-}
-
-export interface OrderDraft {
-  transcript: string;
-  items: DraftItem[];
-  customer: { name?: string; phone?: string; address?: string };
-  platform?: Platform;
-  payment: { status?: PaymentStatus; amount?: number; method?: PaymentMethod };
-  delivery_due_date?: string;
-  prep_time_days?: number;
-  delivery_charge?: number;
-  warnings: string[];
-}

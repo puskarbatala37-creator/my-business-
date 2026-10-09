@@ -408,3 +408,18 @@ textarea.input { min-height: 80px; resize: vertical; }
 .badges-legend { list-style: none; padding-left: 0 !important; }
 .badges-legend .badge { margin-right: 6px; }
 .guide p, .guide blockquote { margin: 0; }
+
+/* ── Voice, one field at a time ── */
+.field-head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 34px; }
+.field-head > span:first-child { min-width: 0; }
+.mic-btn { flex: none; width: 34px; height: 34px; border-radius: 50%; border: 0; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); cursor: pointer; transition: transform 0.15s var(--ease-out), background-color 0.15s; }
+.mic-btn:active { transform: scale(0.9); }
+.mic-btn.on { background: var(--bad); color: var(--bad-ink); animation: pulse 1.2s infinite; }
+.mic-btn[aria-disabled="true"] { opacity: 0.4; cursor: default; }
+.listening-bar { position: fixed; left: 8px; right: 8px; bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + 8px); z-index: 55; max-width: 704px; margin: 0 auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 12px; border-radius: 16px; background: var(--surface); border: 1px solid var(--accent); box-shadow: 0 8px 28px rgb(0 0 0 / 0.18); animation: up 0.2s var(--ease-out); }
+.listening-dot { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--bad); color: var(--bad-ink); flex: none; animation: pulse 1.2s infinite; }
+.listening-dot.reading { background: var(--accent); color: var(--accent-ink); animation: none; }
+.listening-heard { font-size: 15px; color: var(--text-2); overflow-wrap: anywhere; }
+.listening-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
+.listening-actions .seg button { min-height: 34px; font-size: 13px; padding: 0 10px; }
+.section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }

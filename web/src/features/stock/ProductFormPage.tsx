@@ -1,6 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { FieldHead, MicButton } from '../../components/FieldVoice';
 import { Icon } from '../../components/Icon';
 import { useCatalog } from '../../components/VariantPicker';
 import { Loading, MoneyInput, PhotoInput, Spinner, StockBadge, TopBar, useToast } from '../../components/ui';
@@ -124,7 +125,9 @@ export function ProductFormPage() {
       <main className="page stack" style={{ paddingTop: 12, paddingBottom: 90 }}>
         <section className="card stack">
           <div className="field" role="radiogroup" aria-labelledby="category-label">
-            <span id="category-label">Category</span>
+            <FieldHead text={<span id="category-label">Category</span>}>
+              <MicButton label="Category" kind="category" onValue={(id) => setCategoryId(id)} />
+            </FieldHead>
             <div className="chips" style={{ flexWrap: 'wrap' }}>
               {data.categories.map((c) => (
                 <button type="button" key={c.id} role="radio" aria-checked={categoryId === c.id} className={`chip ${categoryId === c.id ? 'on' : ''}`} onClick={() => setCategoryId(c.id)}>
@@ -140,17 +143,23 @@ export function ProductFormPage() {
           </div>
           {categoryId === 'new' && (
             <label className="field">
-              New category name
+              <FieldHead text="New category name">
+                <MicButton label="New category name" kind="name" onValue={setNewCategory} />
+              </FieldHead>
               <input className="input" autoFocus value={newCategory} onChange={(e) => setNewCategory(e.target.value)} placeholder="e.g. Shawl, Dupatta, Gown" maxLength={80} />
               <span className="tiny muted">It's added to your categories when you save, ready for future products.</span>
             </label>
           )}
           <label className="field">
-            Product / design name
+            <FieldHead text="Product / design name">
+              <MicButton label="Product name" kind="name" onValue={setName} />
+            </FieldHead>
             <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Banarasi Silk" />
           </label>
           <label className="field">
-            Sizes (comma separated, optional)
+            <FieldHead text="Sizes (comma separated, optional)">
+              <MicButton label="Sizes" kind="text" onValue={(t: string) => setSizes(t.replace(/\s+(and|र)\s+/gi, ', '))} />
+            </FieldHead>
             <input className="input" value={sizes} onChange={(e) => setSizes(e.target.value)} placeholder="e.g. S, M, L, XL or Free" />
           </label>
           <label className="field">
@@ -166,7 +175,9 @@ export function ProductFormPage() {
         {!editing && (
           <section className="card stack">
             <label className="field">
-              Total pieces in stock
+              <FieldHead text="Total pieces in stock">
+                <MicButton label="Total pieces" kind="number" onValue={(n) => setTotalStock(Math.min(100000, n))} />
+              </FieldHead>
               <input
                 className="input num"
                 inputMode="numeric"
@@ -220,7 +231,9 @@ export function ProductFormPage() {
                 <PhotoInput value={v.photo} onChange={(p) => setV(v.key, { photo: p })} width={96} height={96} label="Photo" />
                 <div className="grow stack" style={{ gap: 8 }}>
                   <label className="field">
-                    Colour
+                    <FieldHead text="Colour">
+                      <MicButton label="Colour" kind="name" onValue={(c) => setV(v.key, { color: c })} />
+                    </FieldHead>
                     <input className="input" value={v.color} onChange={(e) => setV(v.key, { color: e.target.value })} placeholder="e.g. Red" />
                   </label>
                   {v.id ? (
@@ -232,7 +245,9 @@ export function ProductFormPage() {
                     <div className="small muted">{totalStock === '' ? 'Gets the total pieces above' : `All ${totalStock} pieces`}</div>
                   ) : (
                     <label className="field">
-                      Pieces in stock
+                      <FieldHead text="Pieces in stock">
+                        <MicButton label="Pieces in stock" kind="number" onValue={(n) => setV(v.key, { stock: n })} />
+                      </FieldHead>
                       <input className="input num" inputMode="numeric" value={v.stock} onChange={(e) => setV(v.key, { stock: e.target.value === '' ? '' : Number(e.target.value.replace(/\D/g, '')) })} />
                     </label>
                   )}
@@ -240,11 +255,15 @@ export function ProductFormPage() {
               </div>
               <div className="grid-2">
                 <label className="field">
-                  Selling price
+                  <FieldHead text="Selling price">
+                    <MicButton label="Selling price" kind="money" onValue={(n) => setV(v.key, { price: n })} />
+                  </FieldHead>
                   <MoneyInput value={v.price} onChange={(n) => setV(v.key, { price: n })} />
                 </label>
                 <label className="field">
-                  Cost (to make / buy)
+                  <FieldHead text="Cost (to make / buy)">
+                    <MicButton label="Cost" kind="money" onValue={(n) => setV(v.key, { cost: n })} />
+                  </FieldHead>
                   <MoneyInput value={v.cost} onChange={(n) => setV(v.key, { cost: n })} />
                 </label>
               </div>
