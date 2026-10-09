@@ -256,3 +256,18 @@ export function MoneyInput({ value, onChange, placeholder, autoFocus }: { value:
     />
   );
 }
+
+/** An on/off switch row: a label, a line of explanation, and the switch. */
+export function Toggle({ label, sub, on, busy, onChange }: { label: string; sub: ReactNode; on: boolean; busy?: boolean; onChange: (on: boolean) => void }) {
+  return (
+    <button type="button" role="switch" aria-checked={on} className="toggle-row" disabled={busy} onClick={() => onChange(!on)}>
+      <span className="grow">
+        <span className="strong" style={{ display: 'block' }}>
+          {label}
+        </span>
+        <span className="small muted">{sub}</span>
+      </span>
+      <span className={`switch ${on ? 'on' : ''}`} aria-hidden="true" />
+    </button>
+  );
+}

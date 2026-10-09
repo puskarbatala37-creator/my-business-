@@ -1,4 +1,4 @@
-import { FULFILLMENT_STATUSES, PAYMENT_METHODS, PAYMENT_STATUSES, PLATFORMS } from '@slay/shared';
+import { FULFILLMENT_STATUSES, PAYMENT_METHODS, PAYMENT_STATUSES, PLATFORMS, RETURN_KINDS } from '@slay/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import type { AppModule } from '../../core/context.js';
@@ -36,6 +36,12 @@ const zOrder = z.object({
   items: z.array(zItem).min(1, 'add at least one item').max(100),
 });
 
+const zRefund = z.object({
+  amount: zMoney.refine((n) => n > 0, 'enter how much was given back'),
+  method: z.enum(PAYMENT_METHODS, { message: 'choose how the money was given back' }),
+  note: zText(300).optional(),
+});
+
 export const ordersModule: AppModule = {
   name: 'orders',
   init(ctx) {
@@ -55,6 +61,7 @@ export const ordersModule: AppModule = {
           fulfillment: z.enum(FULFILLMENT_STATUSES).optional(),
           payment: z.enum([...PAYMENT_STATUSES, 'open']).optional(),
           state: z.string().optional().default('active'),
+          refund: z.enum(['due']).optional(),
           from: zDate.optional(),
           to: zDate.optional(),
           customer_id: z.coerce.number().int().optional(),
@@ -94,13 +101,39 @@ export const ordersModule: AppModule = {
     });
 
     r.post('/:id/cancel', (req, res) => {
-      const b = parse(z.object({ reason: zText(500).optional().default('') }), req.body ?? {});
-      res.json(orders().cancel(idParam(req), b.reason, req.user!));
+      const b = parse(
+        z.object({ reason: zText(500).optional().default(''), restock: z.boolean().optional(), refund: zRefund.nullable().optional() }),
+        req.body ?? {},
+      );
+      res.json(orders().cancel(idParam(req), b.reason, req.user!, { restock: b.restock, refund: b.refund }));
+    });
+
+    // Optional after-sale actions: a return (pieces back), an exchange (pieces back + replacements), a refund.
+    r.post('/:id/returns', (req, res) => {
+      const b = parse(
+        z.object({
+          kind: z.enum(RETURN_KINDS),
+          reason: zText(500).optional(),
+          lines: z
+            .array(z.object({ item_id: z.coerce.number().int().positive(), quantity: z.coerce.number().int().min(1).max(1000), restock: z.boolean() }))
+            .min(1, 'choose at least one piece that came back')
+            .max(100),
+          replacements: z.array(zItem).max(100).optional(),
+          refund: zRefund.nullable().optional(),
+          version: z.coerce.number().int(),
+        }),
+        req.body,
+      );
+      res.status(201).json(orders().returnItems(idParam(req), b, req.user!));
+    });
+
+    r.post('/:id/refunds', (req, res) => {
+      res.status(201).json(orders().refund(idParam(req), parse(zRefund, req.body), req.user!));
     });
 
     r.post('/:id/payments', (req, res) => {
       const b = parse(
-        z.object({ amount: z.coerce.number().min(-100_000_000).max(100_000_000), method: z.enum(PAYMENT_METHODS), note: zText(300).optional() }),
+        z.object({ amount: z.coerce.number().min(0).max(100_000_000), method: z.enum(PAYMENT_METHODS), note: zText(300).optional() }),
         req.body,
       );
       res.status(201).json(orders().addPayment(idParam(req), b, req.user!));

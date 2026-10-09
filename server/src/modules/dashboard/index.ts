@@ -15,8 +15,9 @@ export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
       .prepare(
         `SELECT COUNT(*) AS orders, COALESCE(SUM(total), 0) AS sales, COALESCE(SUM(amount_paid), 0) AS collected,
                 COALESCE(SUM(delivery_charge), 0) AS delivery,
-                COALESCE(SUM((SELECT SUM(i.unit_cost * i.quantity) FROM order_items i WHERE i.order_id = o.id)), 0) AS cost
-           FROM orders o WHERE state = 'active' AND order_date BETWEEN ? AND ?`,
+                -- Pieces returned and put back in stock cost nothing; ones that couldn't be resold still do.
+                COALESCE(SUM((SELECT SUM(i.unit_cost * (i.quantity - i.restocked_qty)) FROM order_items i WHERE i.order_id = o.id)), 0) AS cost
+           FROM orders o WHERE state IN ('active', 'returned') AND order_date BETWEEN ? AND ?`,
       )
       .get(from, to) as any;
     return { orders: r.orders, sales: money(r.sales), collected: money(r.collected), cost: money(r.cost), 
@@ -30,7 +31,7 @@ export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
   const byMonth = db
     .prepare(
       `SELECT substr(order_date, 1, 7) AS month, COUNT(*) AS orders, COALESCE(SUM(total), 0) AS sales
-         FROM orders WHERE state = 'active' AND order_date >= ? GROUP BY month ORDER BY month`,
+         FROM orders WHERE state IN ('active', 'returned') AND order_date >= ? GROUP BY month ORDER BY month`,
     )
     .all(sixMonths) as { month: string; orders: number; sales: number }[];
   const spendByMonth = db
@@ -47,7 +48,7 @@ export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
 
   const weekFrom = addDays(today, -6);
   const byDay = db
-    .prepare(`SELECT order_date AS date, COALESCE(SUM(total), 0) AS sales, COUNT(*) AS orders FROM orders WHERE state = 'active' AND order_date >= ? GROUP BY order_date`)
+    .prepare(`SELECT order_date AS date, COALESCE(SUM(total), 0) AS sales, COUNT(*) AS orders FROM orders WHERE state IN ('active', 'returned') AND order_date >= ? GROUP BY order_date`)
     .all(weekFrom) as { date: string; sales: number; orders: number }[];
   const days = Array.from({ length: 7 }, (_, i) => addDays(weekFrom, i)).map((date) => {
     const d = byDay.find((x) => x.date === date);
@@ -56,6 +57,13 @@ export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
 
   const outstanding = db
     .prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(total - amount_paid), 0) AS due FROM orders WHERE state = 'active' AND payment_status <> 'paid'`)
+    .get() as any;
+  // Money owed back to customers: paid on a cancelled order, or more paid than an order is worth after a return.
+  const refundsDue = db
+    .prepare(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(amount_paid - CASE WHEN state = 'cancelled' THEN 0 ELSE total END), 0) AS due FROM orders
+        WHERE amount_paid > CASE WHEN state = 'cancelled' THEN 0 ELSE total END + 0.001`,
+    )
     .get() as any;
   const toSend = db.prepare(`SELECT COUNT(*) AS n FROM orders WHERE state = 'active' AND fulfillment_status = 'pending'`).get() as any;
   const dueSoon = db
@@ -79,6 +87,7 @@ export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
     months,
     days,
     outstanding: { orders: outstanding.n, amount: money(outstanding.due) },
+    refunds_due: { orders: refundsDue.n, amount: money(refundsDue.due) },
     to_send: toSend.n,
     due_soon: dueSoon,
     low_stock: lowStock,

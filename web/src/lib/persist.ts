@@ -50,8 +50,9 @@ export async function restoreQueries(qc: QueryClient) {
     const saved = await tx<Saved | undefined>('readonly', (s) => s.get(KEY));
     if (!saved || saved.buster !== BUSTER || Date.now() - saved.savedAt > MAX_AGE || !saved.userId) return;
     hydrate(qc, saved.state);
-    // Check the sign-in is still valid as soon as there's a connection.
-    qc.invalidateQueries({ queryKey: ['me'], refetchType: 'none' });
+    // Saved screens show at once but are always re-checked when opened (also the sign-in): the copy
+    // may be from just before a change – e.g. made on the other phone, or the last save didn't finish.
+    qc.invalidateQueries({ refetchType: 'none' });
   } catch {
     /* private mode / storage blocked: just start empty */
   }

@@ -22,6 +22,7 @@ interface Summary {
   months: { month: string; orders: number; sales: number; receipts_spent: number }[];
   days: { date: string; sales: number; orders: number }[];
   outstanding: { orders: number; amount: number };
+  refunds_due: { orders: number; amount: number };
   to_send: number;
   due_soon: { id: number; invoice_no: string; delivery_due_date: string; customer_name: string }[];
   low_stock: { id: number; color: string; stock: number; photo: string | null; product_name: string }[];
@@ -113,6 +114,17 @@ export function DashboardPage() {
                   <div className="sub">{d.outstanding.orders} unpaid / partial</div>
                 </Link>
               </div>
+              {d.refunds_due.orders > 0 && (
+                <Link to="/orders?refund=due&state=all" className="stat mt" style={{ color: 'inherit', display: 'block' }}>
+                  <div className="label">To give back to customers</div>
+                  <div className="value" style={{ color: 'var(--warn)' }}>
+                    {npr(d.refunds_due.amount)}
+                  </div>
+                  <div className="sub">
+                    {d.refunds_due.orders} order{d.refunds_due.orders === 1 ? '' : 's'} after a return or cancellation
+                  </div>
+                </Link>
+              )}
             </div>
 
             <div className="card">

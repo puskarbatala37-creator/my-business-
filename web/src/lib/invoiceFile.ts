@@ -107,7 +107,7 @@ function draw(ctx: Ctx, o: OrderDetail): number {
   text('Price', col.price, headY, 22, { weight: 700, align: 'right' });
   text('Amount', col.amount - 18, headY, 22, { weight: 700, align: 'right' });
   y += 56;
-  for (const i of o.items) {
+  for (const i of invoiceItems(o)) {
     font(ctx, 26, 500);
     const name = wrap(ctx, `${i.product_name} – ${i.color}`, col.qty - M - 110);
     let rowY = y + 42;
@@ -137,9 +137,11 @@ function draw(ctx: Ctx, o: OrderDetail): number {
   if (o.delivery_charge > 0) row('Delivery', npr(o.delivery_charge));
   if (o.discount > 0) row('Discount', `−${npr(o.discount)}`);
   row('Total', npr(o.total), { bold: true });
-  const methods = [...new Set(o.payments.map((p) => PAYMENT_METHOD_LABELS[p.method]))].join(', ');
-  row(`Paid${methods ? ` (${methods})` : ''}`, npr(o.amount_paid), { color: o.amount_paid > 0 ? C.good : undefined });
-  if (o.balance_due > 0) row(o.payment_status === 'unpaid' ? 'Cash on delivery' : 'Balance due', npr(o.balance_due), { bold: true, color: C.accent });
+  const methods = paidMethods(o);
+  row(`Paid${methods ? ` (${methods})` : ''}`, npr(o.amount_paid + o.refunded), { color: o.amount_paid > 0 ? C.good : undefined });
+  if (o.refunded > 0) row('Refunded', `−${npr(o.refunded)}`);
+  if (o.refund_due > 0) row('To be refunded', npr(o.refund_due), { bold: true, color: C.accent });
+  else if (o.balance_due > 0) row(o.payment_status === 'unpaid' ? 'Cash on delivery' : 'Balance due', npr(o.balance_due), { bold: true, color: C.accent });
   else row('Fully paid', '✓', { bold: true, color: C.good });
 
   // Status, tracking, notes
@@ -228,3 +230,14 @@ export function pdfWithImage(jpeg: Uint8Array, width: number, height: number): B
   push(`trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`);
   return new Blob(parts as BlobPart[], { type: 'application/pdf' });
 }
+
+/**
+ * The lines an invoice shows: only the pieces the customer kept (returned pieces are left out, and a
+ * line returned in full disappears). Exchange replacements are ordinary lines.
+ */
+export function invoiceItems(o: OrderDetail) {
+  return o.items.filter((i) => i.quantity - i.returned_qty > 0).map((i) => ({ ...i, quantity: i.quantity - i.returned_qty }));
+}
+
+/** How the customer paid (refunds left out), e.g. "Cash, eSewa". */
+export const paidMethods = (o: OrderDetail) => [...new Set(o.payments.filter((p) => p.amount > 0).map((p) => PAYMENT_METHOD_LABELS[p.method]))].join(', ');

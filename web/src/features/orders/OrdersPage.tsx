@@ -20,8 +20,10 @@ const STATUS = [
   { key: 'partial', label: 'Partial', params: { payment: 'partial' } },
   { key: 'paid', label: 'Paid', params: { payment: 'paid' } },
   { key: 'cancelled', label: 'Cancelled', params: { state: 'cancelled' } },
+  { key: 'returned', label: 'Returned', params: { state: 'returned' } },
+  { key: 'refund', label: 'To refund', params: { refund: 'due', state: 'all' } },
 ] as const;
-const STATUS_KEYS = ['fulfillment', 'payment', 'state'];
+const STATUS_KEYS = ['fulfillment', 'payment', 'state', 'refund'];
 
 /** Order date shortcuts; "custom" uses the From / To dates. */
 function datePresets(today: string) {

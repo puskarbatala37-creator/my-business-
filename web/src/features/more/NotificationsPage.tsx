@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { OPEN_INSTALL } from '../../components/InstallPrompt';
-import { Spinner, TopBar, useToast } from '../../components/ui';
+import { Spinner, Toggle, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { BLOCKED_HELP, enablePush, pushState, type NotificationPrefs, type PushState } from '../../lib/push';
 
@@ -145,16 +145,3 @@ function PhoneStatus({ state, busy, onSetUp, onTest }: { state: PushState; busy:
   return <div className="alert-banner info">This browser can’t show notifications. Use Chrome on Android, or Slay installed on an iPhone (iOS 16.4 or newer).</div>;
 }
 
-function Toggle({ label, sub, on, busy, onChange }: { label: string; sub: string; on: boolean; busy?: boolean; onChange: (on: boolean) => void }) {
-  return (
-    <button type="button" role="switch" aria-checked={on} className="toggle-row" disabled={busy} onClick={() => onChange(!on)}>
-      <span className="grow">
-        <span className="strong" style={{ display: 'block' }}>
-          {label}
-        </span>
-        <span className="small muted">{sub}</span>
-      </span>
-      <span className={`switch ${on ? 'on' : ''}`} aria-hidden="true" />
-    </button>
-  );
-}

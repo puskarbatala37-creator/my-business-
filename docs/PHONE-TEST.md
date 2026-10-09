@@ -24,7 +24,8 @@ screenshot (and copy any message from *More → Setup check*) and send it over.
 | 16 | **Invoice – Print** | *Invoice → Print*. | The phone's print screen opens with the invoice (you can also *Save as PDF* from there). | ☐ | ☐ |
 | 17 | **Offline** | Turn on airplane mode, open Slay. | It opens, shows the "Offline" strip and recently viewed orders/stock; saving shows "you're offline". | ☐ | ☐ |
 | 18 | **Camera for bills/photos** | *More → Supplier bills → Snap a supplier bill*. | Camera opens; photo saves with the time. | ☐ | ☐ |
+| 19 | **Return / refund (optional feature)** | On a test order that was paid: *Return / exchange → Return*, + one piece, *Give money back now*, Save. Then on another test order: *Cancel order*, switch off *Put the pieces back in stock*. | Order shows *Returned* and the refund under Payments; the other phone gets a "recorded a refund" notification; stock is unchanged for the made-to-order piece. | ☐ | ☐ |
 
 Everything else (products, categories, stock counts, orders with per-piece sizes, payments, platform,
-search, dashboard totals, supplier-bill types) was tested end to end in a real browser against the real
+search, dashboard totals, supplier-bill types, cancel / return / exchange / refund) was tested end to end in a real browser against the real
 server before release; quickly repeat a couple of them on the phone to be sure (e.g. one order).

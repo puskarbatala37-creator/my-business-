@@ -8,6 +8,7 @@ import {
   type PaymentMethod,
   type PaymentStatus,
   type Platform,
+  type ReturnKind,
 } from '@slay/shared';
 import type { AppContext, AuthUser } from '../../core/context.js';
 import { actorOf, logActivity, service } from '../../core/context.js';
@@ -43,6 +44,31 @@ export interface OrderInput {
   items: OrderItemInput[];
 }
 
+export interface RefundInput {
+  amount: number;
+  method: PaymentMethod;
+  note?: string;
+}
+
+export interface ReturnInput {
+  /** `return`: pieces come back. `exchange`: pieces come back and replacement items go out. */
+  kind: ReturnKind;
+  reason?: string;
+  /** Which pieces came back, and whether each goes back into stock. */
+  lines: { item_id: number; quantity: number; restock: boolean }[];
+  /** Exchange only: what the customer gets instead. */
+  replacements?: OrderItemInput[];
+  /** Money given back now (optional – it can also be recorded later). */
+  refund?: RefundInput | null;
+  version: number;
+}
+
+export interface CancelOptions {
+  /** Put the order's pieces back in stock (default). Off for made-to-order pieces already cut. */
+  restock?: boolean;
+  refund?: RefundInput | null;
+}
+
 export interface OrderCreateInput extends OrderInput {
   /** What the customer has paid so far when the order is taken. */
   payment?: { status: PaymentStatus; amount?: number; method?: PaymentMethod | null };
@@ -58,6 +84,8 @@ export interface OrderListFilters {
   fulfillment?: FulfillmentStatus;
   payment?: PaymentStatus | 'open';
   state?: string;
+  /** `due`: orders where money is owed back to the customer. */
+  refund?: 'due';
   from?: string;
   to?: string;
   customer_id?: number;
@@ -107,6 +135,7 @@ export class OrderService {
     if (f.payment === 'open') where.push(`o.payment_status <> 'paid'`);
     else if (f.payment) (where.push('o.payment_status = ?'), args.push(f.payment));
     if (f.state && f.state !== 'all') (where.push('o.state = ?'), args.push(f.state));
+    if (f.refund === 'due') where.push(`o.amount_paid > CASE WHEN o.state = 'cancelled' THEN 0 ELSE o.total END + 0.001`);
     if (f.from) (where.push('o.order_date >= ?'), args.push(f.from));
     if (f.to) (where.push('o.order_date <= ?'), args.push(f.to));
     if (f.customer_id) (where.push('o.customer_id = ?'), args.push(f.customer_id));
@@ -117,7 +146,7 @@ export class OrderService {
     const rows = this.db
       .prepare(
         `SELECT o.*, c.name AS customer_name, c.phone AS customer_phone,
-                (SELECT SUM(quantity) FROM order_items i WHERE i.order_id = o.id) AS item_count,
+                (SELECT SUM(quantity - returned_qty) FROM order_items i WHERE i.order_id = o.id) AS item_count,
                 (SELECT photo FROM order_items i WHERE i.order_id = o.id AND photo IS NOT NULL ORDER BY i.id LIMIT 1) AS thumb,
                 (SELECT GROUP_CONCAT(i.product_name || ' · ' || i.color, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_summary,
                 (SELECT GROUP_CONCAT(DISTINCT i.category_name) FROM order_items i WHERE i.order_id = o.id AND i.category_name <> '') AS categories
@@ -155,9 +184,25 @@ export class OrderService {
     const payments = this.db
       .prepare(`SELECT p.*, u.display_name AS created_by_name FROM payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.order_id = ? ORDER BY p.id`)
       .all(id);
+    const returns = (
+      this.db
+        .prepare(`SELECT r.*, u.display_name AS created_by_name FROM order_returns r LEFT JOIN users u ON u.id = r.created_by WHERE r.order_id = ? ORDER BY r.id`)
+        .all(id) as any[]
+    ).map((r) => ({
+      ...r,
+      items: this.db
+        .prepare(
+          `SELECT ri.order_item_id, ri.quantity, ri.restocked, i.product_name, i.color, i.size FROM order_return_items ri
+             JOIN order_items i ON i.id = ri.order_item_id WHERE ri.return_id = ? ORDER BY ri.id`,
+        )
+        .all(r.id),
+      replacements: (items as any[]).filter((i) => i.return_id === r.id).map((i) => ({ id: i.id, product_name: i.product_name, color: i.color, size: i.size, quantity: i.quantity })),
+      refunded: money(-((payments as any[]).filter((p) => p.return_id === r.id).reduce((n, p) => n + p.amount, 0))),
+    }));
+    const refunded = money(-(payments as any[]).filter((p) => p.amount < 0).reduce((n, p) => n + p.amount, 0));
     const customer = this.customers.get(order.customer_id);
     const history = this.customers.history(order.customer_id, 20).filter((o: any) => o.id !== id);
-    return { ...withBalance(order), customer, items, payments, customer_history: history };
+    return { ...withBalance(order), refunded, customer, items, payments, returns, customer_history: history };
   }
 
   create(input: OrderCreateInput, user: AuthUser) {
@@ -230,6 +275,7 @@ export class OrderService {
       // Lines removed from the order: put their stock back.
       for (const old of existing) {
         if (keep.has(old.id)) continue;
+        if (old.returned_qty > 0) throw badRequest(`${old.product_name} (${old.color}) has a return recorded, so it can’t be removed from the order.`);
         if (old.variant_id) {
           this.catalog.give(old.variant_id, old.quantity, 'order_edit', user.id, id, old.id);
           variantIds.add(old.variant_id);
@@ -243,6 +289,9 @@ export class OrderService {
         if (!old) {
           variantIds.add(this.insertItem(id, item, user.id));
           continue;
+        }
+        if (old.returned_qty > 0 && (old.variant_id !== item.variant_id || item.quantity !== old.quantity)) {
+          throw badRequest(`${old.product_name} (${old.color}) has a return recorded, so its product and quantity can’t be changed. Record another return or exchange instead.`);
         }
         if (old.variant_id !== item.variant_id) {
           if (old.variant_id) {
@@ -317,20 +366,36 @@ export class OrderService {
     return this.get(id);
   }
 
-  cancel(id: number, reason: string, user: AuthUser) {
+  /**
+   * Cancels an order. By default the pieces go back into stock; turn that off for made-to-order
+   * pieces that were already cut. A refund can be recorded at the same time (or later).
+   */
+  cancel(id: number, reason: string, user: AuthUser, opts: CancelOptions = {}) {
+    const restock = opts.restock ?? true;
     const order = this.db.transaction(() => {
       const o = this.db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
       if (!o) throw notFound('Order not found');
-      if (o.state !== 'active') throw conflict('Order is already ' + o.state);
+      if (o.state !== 'active') throw conflict(`This order is already ${o.state}.`);
       const items = this.db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(id) as any[];
-      for (const i of items) if (i.variant_id) this.catalog.give(i.variant_id, i.quantity, 'order_cancel', user.id, id, i.id);
-      const note = reason ? `${o.notes ? o.notes + '\n' : ''}Cancelled: ${reason}` : o.notes;
-      this.db.prepare(`UPDATE orders SET state = 'cancelled', notes = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(note, new Date().toISOString(), id);
-      return { ...o, variantIds: items.map((i) => i.variant_id).filter(Boolean) as number[] };
+      const variantIds: number[] = [];
+      if (restock) {
+        for (const i of items) {
+          const pieces = i.quantity - i.returned_qty; // pieces already returned were dealt with then
+          if (i.variant_id && pieces > 0) {
+            this.catalog.give(i.variant_id, pieces, 'order_cancel', user.id, id, i.id);
+            variantIds.push(i.variant_id);
+          }
+        }
+      }
+      const lines = [o.notes, reason ? `Cancelled: ${reason}` : '', restock ? '' : 'Pieces not put back in stock.'].filter(Boolean);
+      this.db.prepare(`UPDATE orders SET state = 'cancelled', notes = ?, version = version + 1, updated_at = ? WHERE id = ?`).run(lines.join('\n'), new Date().toISOString(), id);
+      const refunded = opts.refund ? this.insertRefund(id, opts.refund, null, user) : 0;
+      return { ...o, variantIds, refunded };
     })();
-    logActivity(this.ctx, user.id, 'order_cancelled', 'order', id, { reason });
+    logActivity(this.ctx, user.id, 'order_cancelled', 'order', id, { reason, restock, refunded: order.refunded || undefined });
     if (order.amount_paid > 0) {
-      this.alerts.raise('paid_order_cancelled', 'warning', `${user.displayName} cancelled order ${order.invoice_no}, which had Rs ${order.amount_paid} paid.`, {}, user.id);
+      const refundNote = order.refunded ? ` Rs ${order.refunded} was refunded.` : ' No refund recorded yet.';
+      this.alerts.raise('paid_order_cancelled', 'warning', `${user.displayName} cancelled order ${order.invoice_no}, which had Rs ${order.amount_paid} paid.${refundNote}`, {}, user.id);
     }
     const since = new Date(Date.now() - 3600_000).toISOString();
     const recent = (this.db.prepare(`SELECT COUNT(*) AS n FROM activity_log WHERE action = 'order_cancelled' AND user_id = ? AND created_at >= ?`).get(user.id, since) as { n: number }).n;
@@ -338,14 +403,119 @@ export class OrderService {
       this.alerts.raiseOnce(`bulk_cancel:${user.id}`, 60, 'bulk_cancellations', 'warning', `Unusual activity: ${user.displayName} cancelled ${recent} orders in the last hour.`, {}, user.id);
     }
     this.publish(user, [id], order.variantIds, `${user.displayName} cancelled ${order.invoice_no}`);
+    if (order.refunded) this.ctx.bus.publish(LIVE_EVENTS.payment, { actor: actorOf(user), ids: [id] });
     return this.get(id);
+  }
+
+  /**
+   * Records pieces coming back from the customer – a plain return, or an exchange where
+   * replacement items go out instead. Each piece can go back into stock or not (made-to-order
+   * pieces usually can't be resold). The order's value drops by the returned pieces; any money
+   * the customer is then owed shows as "refund due" until a refund is recorded.
+   */
+  returnItems(id: number, input: ReturnInput, user: AuthUser) {
+    const replacements = input.replacements ?? [];
+    if (!input.lines.length) throw badRequest('Choose at least one piece that came back');
+    if (input.kind === 'exchange' && !replacements.length) throw badRequest('Choose what the customer gets instead for the exchange');
+    if (input.kind === 'return' && replacements.length) throw badRequest('Replacement items are only for exchanges');
+    const result = this.db.transaction(() => {
+      const o = this.db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
+      if (!o) throw notFound('Order not found');
+      if (o.version !== input.version) throw conflict('This order was just changed on the other phone. Reload it to see the latest version.', 'stale_version');
+      if (o.state !== 'active') throw conflict(`This order is ${o.state}, so nothing more can be returned.`);
+      const items = this.db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(id) as any[];
+      const seen = new Set<number>();
+      const variantIds = new Set<number>();
+      const ret = this.db
+        .prepare('INSERT INTO order_returns (order_id, kind, reason, created_by) VALUES (?, ?, ?, ?) RETURNING id')
+        .get(id, input.kind, input.reason?.trim() ?? '', user.id) as { id: number };
+      let pieces = 0;
+      let restocked = 0;
+      for (const line of input.lines) {
+        const item = items.find((i) => i.id === line.item_id);
+        if (!item) throw badRequest('That item isn’t on this order');
+        if (seen.has(item.id)) throw badRequest(`${item.product_name} (${item.color}) is listed twice`);
+        seen.add(item.id);
+        const left = item.quantity - item.returned_qty;
+        if (line.quantity > left) {
+          throw badRequest(left === 0 ? `${item.product_name} (${item.color}) has already been returned` : `Only ${left} of ${item.product_name} (${item.color}) can still be returned`);
+        }
+        const back = line.restock && item.variant_id ? line.quantity : 0;
+        const returned = item.returned_qty + line.quantity;
+        this.db
+          .prepare('UPDATE order_items SET returned_qty = ?, restocked_qty = restocked_qty + ?, status = ? WHERE id = ?')
+          .run(returned, back, returned === item.quantity ? (input.kind === 'exchange' ? 'exchanged' : 'returned') : item.status, item.id);
+        this.db.prepare('INSERT INTO order_return_items (return_id, order_item_id, quantity, restocked) VALUES (?, ?, ?, ?)').run(ret.id, item.id, line.quantity, back);
+        if (back) {
+          this.catalog.give(item.variant_id, back, input.kind, user.id, id, item.id);
+          variantIds.add(item.variant_id);
+        }
+        pieces += line.quantity;
+        restocked += back;
+      }
+      for (const r of replacements) variantIds.add(this.insertItem(id, r, user.id, { reason: 'exchange', returnId: ret.id }));
+      this.recalculate(id);
+      const { kept } = this.db.prepare('SELECT COALESCE(SUM(quantity - returned_qty), 0) AS kept FROM order_items WHERE order_id = ?').get(id) as { kept: number };
+      const state = kept === 0 ? 'returned' : 'active';
+      this.db.prepare('UPDATE orders SET state = ?, version = version + 1, updated_at = ? WHERE id = ?').run(state, new Date().toISOString(), id);
+      const refunded = input.refund ? this.insertRefund(id, input.refund, ret.id, user) : 0;
+      return { returnId: ret.id, invoiceNo: o.invoice_no as string, variantIds: [...variantIds], pieces, restocked, refunded };
+    })();
+    logActivity(this.ctx, user.id, input.kind === 'exchange' ? 'items_exchanged' : 'items_returned', 'order', id, {
+      return_id: result.returnId,
+      pieces: result.pieces,
+      restocked: result.restocked,
+      replacements: replacements.length || undefined,
+      refunded: result.refunded || undefined,
+      reason: input.reason || undefined,
+    });
+    if (result.refunded) this.refundAlert(result.invoiceNo, result.refunded, user);
+    const what = input.kind === 'exchange' ? 'an exchange' : `a return of ${result.pieces} piece${result.pieces === 1 ? '' : 's'}`;
+    this.publish(user, [id], result.variantIds, `${user.displayName} recorded ${what} on ${result.invoiceNo}`);
+    if (result.refunded) this.ctx.bus.publish(LIVE_EVENTS.payment, { actor: actorOf(user), ids: [id] });
+    return this.get(id);
+  }
+
+  /** Money given back to the customer – on its own, e.g. later after a return or a cancellation. */
+  refund(id: number, input: RefundInput, user: AuthUser) {
+    const o = this.db.transaction(() => {
+      const o = this.db.prepare('SELECT id, invoice_no FROM orders WHERE id = ?').get(id) as any;
+      if (!o) throw notFound('Order not found');
+      this.insertRefund(id, input, null, user);
+      this.db.prepare('UPDATE orders SET version = version + 1, updated_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+      return o;
+    })();
+    logActivity(this.ctx, user.id, 'refund_recorded', 'order', id, { amount: money(input.amount), method: input.method });
+    this.refundAlert(o.invoice_no, money(input.amount), user);
+    this.ctx.bus.publish(LIVE_EVENTS.payment, { actor: actorOf(user), ids: [id] });
+    this.ctx.bus.publish(LIVE_EVENTS.order, { actor: actorOf(user), ids: [id], message: `${user.displayName} recorded a refund on ${o.invoice_no}` });
+    return this.get(id);
+  }
+
+  /** A refund is a payment row with a negative amount, so "paid" always shows what the business kept. */
+  private insertRefund(orderId: number, r: RefundInput, returnId: number | null, user: AuthUser) {
+    const amount = money(r.amount);
+    if (!(amount > 0)) throw badRequest('Enter how much was given back');
+    const { paid } = this.db.prepare('SELECT COALESCE(SUM(amount), 0) AS paid FROM payments WHERE order_id = ?').get(orderId) as { paid: number };
+    if (amount > money(paid)) {
+      throw badRequest(money(paid) <= 0 ? 'Nothing has been paid on this order, so there is nothing to refund.' : `You can refund at most Rs ${money(paid)} – that’s all that has been paid on this order.`);
+    }
+    this.db
+      .prepare(`INSERT INTO payments (order_id, amount, method, note, kind, return_id, created_by) VALUES (?, ?, ?, ?, 'refund', ?, ?)`)
+      .run(orderId, -amount, r.method, r.note?.trim() ?? '', returnId, user.id);
+    this.recalculate(orderId);
+    return amount;
+  }
+
+  private refundAlert(invoiceNo: string, amount: number, user: AuthUser) {
+    this.alerts.raise('refund_recorded', 'warning', `${user.displayName} recorded a refund of Rs ${amount} on order ${invoiceNo}.`, { invoice_no: invoiceNo, amount }, user.id);
   }
 
   addPayment(orderId: number, p: { amount: number; method: PaymentMethod; note?: string; provider_ref?: string | null }, user: AuthUser | null) {
     this.db.transaction(() => {
       const o = this.db.prepare('SELECT state FROM orders WHERE id = ?').get(orderId) as any;
       if (!o) throw notFound('Order not found');
-      if (p.amount === 0) throw badRequest('Amount must not be zero');
+      if (!(p.amount > 0)) throw badRequest('Enter the amount received. To give money back, use Refund.');
       this.insertPayment(orderId, money(p.amount), p.method, p.note ?? '', p.provider_ref ?? null, user?.id ?? null);
       this.db.prepare('UPDATE orders SET payment_method = COALESCE(payment_method, ?), version = version + 1, updated_at = ? WHERE id = ?').run(p.method, new Date().toISOString(), orderId);
       this.recalculate(orderId);
@@ -365,20 +535,20 @@ export class OrderService {
       this.db.prepare('UPDATE orders SET version = version + 1, updated_at = ? WHERE id = ?').run(new Date().toISOString(), orderId);
       this.recalculate(orderId);
     })();
-    logActivity(this.ctx, user.id, 'payment_removed', 'order', orderId, { amount: p.amount, method: p.method });
+    logActivity(this.ctx, user.id, p.kind === 'refund' ? 'refund_removed' : 'payment_removed', 'order', orderId, { amount: p.amount, method: p.method });
     this.ctx.bus.publish(LIVE_EVENTS.order, { actor: actorOf(user), ids: [orderId] });
     return this.get(orderId);
   }
 
-  private insertItem(orderId: number, item: OrderItemInput, userId: number): number {
+  private insertItem(orderId: number, item: OrderItemInput, userId: number, opts: { reason?: 'order' | 'exchange'; returnId?: number } = {}): number {
     const v = this.catalog.getVariant(item.variant_id);
     const row = this.db
       .prepare(
-        `INSERT INTO order_items (order_id, variant_id, product_name, category_name, color, size, unit_sizes, quantity, unit_price, unit_cost, photo)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        `INSERT INTO order_items (order_id, variant_id, product_name, category_name, color, size, unit_sizes, quantity, unit_price, unit_cost, photo, return_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       )
-      .get(orderId, v.id, v.product_name, v.category_name, v.color, ...lineSizes(item), item.quantity, money(item.unit_price), v.cost, item.photo || v.photo) as { id: number };
-    this.catalog.take(v.id, item.quantity, 'order', userId, orderId, row.id);
+      .get(orderId, v.id, v.product_name, v.category_name, v.color, ...lineSizes(item), item.quantity, money(item.unit_price), v.cost, item.photo || v.photo, opts.returnId ?? null) as { id: number };
+    this.catalog.take(v.id, item.quantity, opts.reason ?? 'order', userId, orderId, row.id);
     return v.id;
   }
 
@@ -391,7 +561,8 @@ export class OrderService {
   /** Recomputes totals & derived payment status from items and the payment ledger. */
   recalculate(orderId: number) {
     const o = this.db.prepare('SELECT delivery_charge, discount FROM orders WHERE id = ?').get(orderId) as any;
-    const { subtotal } = this.db.prepare('SELECT COALESCE(SUM(quantity * unit_price), 0) AS subtotal FROM order_items WHERE order_id = ?').get(orderId) as any;
+    // Returned pieces no longer count towards what the customer pays.
+    const { subtotal } = this.db.prepare('SELECT COALESCE(SUM((quantity - returned_qty) * unit_price), 0) AS subtotal FROM order_items WHERE order_id = ?').get(orderId) as any;
     const { paid } = this.db.prepare('SELECT COALESCE(SUM(amount), 0) AS paid FROM payments WHERE order_id = ?').get(orderId) as any;
     const total = Math.max(0, money(subtotal + o.delivery_charge - o.discount));
     const status = derivePaymentStatus(total, paid);
@@ -405,8 +576,17 @@ export class OrderService {
   }
 }
 
-function withBalance<T extends { total: number; amount_paid: number }>(o: T) {
-  return { ...o, balance_due: Math.max(0, money(o.total - o.amount_paid)) };
+/**
+ * `balance_due`: what the customer still owes. `refund_due`: what the business owes back – more
+ * paid than the order is now worth (after a return or exchange), or anything paid on a cancelled order.
+ */
+function withBalance<T extends { total: number; amount_paid: number; state?: string }>(o: T) {
+  const worth = o.state === 'cancelled' ? 0 : o.total;
+  return {
+    ...o,
+    balance_due: o.state === 'cancelled' ? 0 : Math.max(0, money(o.total - o.amount_paid)),
+    refund_due: Math.max(0, money(o.amount_paid - worth)),
+  };
 }
 
 /**

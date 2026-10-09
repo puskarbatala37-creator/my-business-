@@ -30,8 +30,8 @@ export class CustomerService {
     return this.ctx.db
       .prepare(
         `SELECT c.*, COUNT(o.id) AS order_count,
-                COALESCE(SUM(CASE WHEN o.state = 'active' THEN o.total END), 0) AS total_spent,
-                COALESCE(SUM(CASE WHEN o.state = 'active' THEN o.total - o.amount_paid END), 0) AS balance_due,
+                COALESCE(SUM(CASE WHEN o.state IN ('active', 'returned') THEN o.total END), 0) AS total_spent,
+                COALESCE(SUM(CASE WHEN o.state = 'active' THEN MAX(o.total - o.amount_paid, 0) END), 0) AS balance_due,
                 MAX(o.order_date) AS last_order_date
            FROM customers c LEFT JOIN orders o ON o.customer_id = c.id
           WHERE ? = '' OR c.name LIKE ? OR c.phone LIKE ? OR c.social_handle LIKE ?
@@ -57,7 +57,7 @@ export class CustomerService {
     return this.ctx.db
       .prepare(
         `SELECT o.id, o.invoice_no, o.order_date, o.total, o.amount_paid, o.payment_status, o.fulfillment_status, o.state, o.platform,
-                (SELECT GROUP_CONCAT(i.product_name || ' (' || i.color || ') ×' || i.quantity, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_summary
+                (SELECT GROUP_CONCAT(i.product_name || ' (' || i.color || ') ×' || i.quantity || CASE WHEN i.returned_qty > 0 THEN ' – ' || i.returned_qty || ' returned' ELSE '' END, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_summary
            FROM orders o WHERE o.customer_id = ? ORDER BY o.order_date DESC, o.id DESC LIMIT ?`,
       )
       .all(customerId, limit);

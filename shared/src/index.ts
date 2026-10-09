@@ -27,11 +27,22 @@ export const FULFILLMENT_STATUSES = ['pending', 'sent'] as const;
 export type FulfillmentStatus = (typeof FULFILLMENT_STATUSES)[number];
 
 /**
- * Overall lifecycle of an order. `returned` / `exchanged` are reserved for the
- * future returns & exchanges feature – the data model already supports them.
+ * Overall lifecycle of an order. `returned`: every piece came back. (An exchange keeps the order
+ * `active`, since the replacement still has to go out; `exchanged` is kept for older data.)
  */
 export const ORDER_STATES = ['active', 'cancelled', 'returned', 'exchanged'] as const;
 export type OrderState = (typeof ORDER_STATES)[number];
+
+/** Optional after-sale actions on an order: pieces coming back, with or without a replacement. */
+export const RETURN_KINDS = ['return', 'exchange'] as const;
+export type ReturnKind = (typeof RETURN_KINDS)[number];
+
+export const ORDER_STATE_LABELS: Record<OrderState, string> = {
+  active: 'Active',
+  cancelled: 'Cancelled',
+  returned: 'Returned',
+  exchanged: 'Exchanged',
+};
 
 /** Where an order came from. Every order records one of these. */
 export const PLATFORMS = ['tiktok', 'facebook', 'instagram', 'whatsapp'] as const;
@@ -62,7 +73,7 @@ export const PLATFORM_LABELS: Record<string, string> = {
 
 export const platformLabel = (p: string | null | undefined) => (p ? (PLATFORM_LABELS[p] ?? p) : 'Unknown');
 
-/** Why a stock count changed. `return` / `exchange` are reserved for later. */
+/** Why a stock count changed. `return` / `exchange`: pieces put back (or replacements taken) after a sale. */
 export const STOCK_REASONS = ['order', 'order_edit', 'order_cancel', 'manual', 'restock', 'return', 'exchange'] as const;
 export type StockReason = (typeof STOCK_REASONS)[number];
 

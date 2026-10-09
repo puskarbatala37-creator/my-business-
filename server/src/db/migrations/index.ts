@@ -7,6 +7,7 @@ import signup from './006_signup.js';
 import notifications from './007_notifications.js';
 import receiptTypes from './008_receipt_types.js';
 import unitSizes from './009_unit_sizes.js';
+import returns from './010_returns.js';
 
 /**
  * Ordered list of schema migrations. To change the schema, append a new
@@ -22,4 +23,5 @@ export const migrations: { id: string; sql: string }[] = [
   { id: '007_notifications', sql: notifications },
   { id: '008_receipt_types', sql: receiptTypes },
   { id: '009_unit_sizes', sql: unitSizes },
+  { id: '010_returns', sql: returns },
 ];

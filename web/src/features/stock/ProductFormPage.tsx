@@ -4,7 +4,7 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { FieldHead, MicButton } from '../../components/FieldVoice';
 import { Icon } from '../../components/Icon';
 import { useCatalog } from '../../components/VariantPicker';
-import { Loading, MoneyInput, PhotoInput, Spinner, StockBadge, TopBar, useToast } from '../../components/ui';
+import { Loading, MoneyInput, PhotoInput, Spinner, StockBadge, Toggle, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 
 interface VariantForm {
@@ -39,6 +39,7 @@ export function ProductFormPage() {
   const [sizes, setSizes] = useState('');
   const [description, setDescription] = useState('');
   const [aliases, setAliases] = useState('');
+  const [returnable, setReturnable] = useState(false);
   const [variants, setVariants] = useState<VariantForm[]>([blankVariant()]);
   const [saving, setSaving] = useState(false);
 
@@ -52,6 +53,7 @@ export function ProductFormPage() {
       setSizes(p.sizes);
       setDescription(p.description);
       setAliases(p.voice_aliases);
+      setReturnable(!!p.returnable);
       setVariants(p.variants.map((v) => ({ key: String(v.id), id: v.id, color: v.color, stock: v.stock, currentStock: v.stock, cost: v.cost, price: v.price, photo: v.photo, voice_aliases: v.voice_aliases })));
       setLoaded(true);
     }
@@ -92,6 +94,7 @@ export function ProductFormPage() {
           sizes,
           description,
           voice_aliases: aliases,
+          returnable,
           total_stock: Number(totalStock),
           // One colour: the server gives it the whole total.
           variants: live.map((v) => ({ ...variantBody(v), ...(live.length > 1 ? { stock: Number(v.stock) || 0 } : {}) })),
@@ -99,7 +102,7 @@ export function ProductFormPage() {
         toast('Product added');
         nav(`/stock`, { replace: true, state: { highlight: r.id } });
       } else {
-        await api.patch(`/api/catalog/products/${id}`, { category_id: categoryId, name, sizes, description, voice_aliases: aliases });
+        await api.patch(`/api/catalog/products/${id}`, { category_id: categoryId, name, sizes, description, voice_aliases: aliases, returnable });
         for (const v of variants) {
           if (v.id) await api.patch(`/api/catalog/variants/${v.id}`, { ...variantBody(v), archived: !!v.archived });
           else if (v.color.trim() && !v.archived) await api.post(`/api/catalog/products/${id}/variants`, { ...variantBody(v), stock: Number(v.stock) || 0 });
@@ -170,6 +173,12 @@ export function ProductFormPage() {
             Description (optional)
             <textarea className="input" value={description} onChange={(e) => setDescription(e.target.value)} rows={2} />
           </label>
+          <Toggle
+            label="Can be returned and sold again"
+            sub={returnable ? 'Returned pieces go back into stock by default.' : 'Off for made-to-order pieces (e.g. kurtas cut to size). Returns are still possible – the pieces just aren’t put back in stock unless you choose to.'}
+            on={returnable}
+            onChange={setReturnable}
+          />
         </section>
 
         {!editing && (

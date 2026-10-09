@@ -48,6 +48,8 @@ export interface Product {
   sizes: string;
   voice_aliases: string;
   archived: number;
+  /** 1 when pieces can normally be taken back and resold (off for made-to-order). */
+  returnable: number;
   variants: Variant[];
 }
 
@@ -87,6 +89,8 @@ export interface OrderSummary {
   total: number;
   amount_paid: number;
   balance_due: number;
+  /** Money owed back to the customer (after a return, or paid on a cancelled order). */
+  refund_due: number;
   notes: string;
   tracking_number: string;
   delivery_due_date: string | null;
@@ -124,11 +128,31 @@ export interface OrderItem {
   unit_cost: number;
   photo: string | null;
   current_stock: number | null;
+  /** 'sold', or 'returned' / 'exchanged' once every piece came back. */
+  status: string;
+  /** Pieces that came back, and how many of those went back into stock. */
+  returned_qty: number;
+  restocked_qty: number;
+  /** Set on a replacement line added by an exchange. */
+  return_id: number | null;
+}
+
+export interface OrderReturn {
+  id: number;
+  kind: 'return' | 'exchange';
+  reason: string;
+  created_at: string;
+  created_by_name: string | null;
+  items: { order_item_id: number; quantity: number; restocked: number; product_name: string; color: string; size: string }[];
+  replacements: { id: number; product_name: string; color: string; size: string; quantity: number }[];
+  refunded: number;
 }
 
 export interface Payment {
   id: number;
+  /** Negative for a refund. */
   amount: number;
+  kind: 'payment' | 'refund';
   method: PaymentMethod;
   provider_ref: string | null;
   note: string;
@@ -153,6 +177,9 @@ export interface OrderDetail extends OrderSummary {
   customer: Customer;
   items: OrderItem[];
   payments: Payment[];
+  returns: OrderReturn[];
+  /** Total given back so far. */
+  refunded: number;
   customer_history: HistoryRow[];
   created_by_name: string | null;
   created_at: string;

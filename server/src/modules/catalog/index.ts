@@ -24,6 +24,8 @@ const zProduct = z.object({
   description: zText(2000).optional(),
   sizes: zText(300).optional(),
   voice_aliases: zText(500).optional(),
+  /** Can normally be taken back and sold again (off for made-to-order pieces). */
+  returnable: z.boolean().optional(),
 });
 
 export const catalogModule: AppModule = {

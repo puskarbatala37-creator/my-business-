@@ -120,7 +120,7 @@ export function GuidePage() {
             <b>Something new to sell?</b> Tap <b>Product</b> at the top of Stock, choose the type (Kurta, Sari, Lehenga…), type the name, how many you have, and
             each colour with its price. Tap <b>Save product</b>.
           </p>
-          <Tip>You never need to take stock out by hand when you sell – saving an order does it. Cancelling an order puts the pieces back.</Tip>
+          <Tip>You never need to take stock out by hand when you sell – saving an order does it. Cancelling an order puts the pieces back (you can switch that off if they were already cut).</Tip>
         </Topic>
 
         <Topic title="Check who has paid">
@@ -155,6 +155,29 @@ export function GuidePage() {
           <p>
             For the bill: open the order → <b>Invoice</b> → <b>Share</b> (to send it on WhatsApp or Instagram), <b>Save</b> (keep a copy) or <b>Print</b>.
           </p>
+        </Topic>
+
+        <Topic title="Cancel, return, exchange or refund (only when needed)">
+          <p>Most orders never need this. It's there for the day a customer cancels or sends something back.</p>
+          <ul>
+            <li>
+              <b>Cancel:</b> open the order → <b>Cancel order</b>. Choose whether the pieces go back into stock (switch it off if the kurta was already
+              cut). If the customer had paid, you can give the money back right there, or later.
+            </li>
+            <li>
+              <b>Return:</b> <b>Return / exchange</b> → <b>Return</b> → tap <b>+</b> for each piece that came back. Made-to-order pieces are not put back in
+              stock unless you switch it on. Slay shows how much to give back.
+            </li>
+            <li>
+              <b>Exchange:</b> same button → <b>Exchange</b> → choose the pieces that came back → <b>Add replacement</b> (another size, colour or product).
+              If the new item costs more, the order shows what the customer still owes; if less, what to give back.
+            </li>
+            <li>
+              <b>Refund:</b> when money is owed back the order shows <b>To give back</b> and a <b>Record refund</b> button (also on the Home screen). Enter
+              the amount and how it was paid back. Your partner gets a notification for every refund.
+            </li>
+          </ul>
+          <Tip>For a product that can be resold after a return, switch on <b>Can be returned and sold again</b> on the product – returned pieces then go back into stock by default.</Tip>
         </Topic>
 
         <Topic title="If something goes wrong">

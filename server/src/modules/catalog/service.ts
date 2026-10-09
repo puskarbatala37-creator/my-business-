@@ -106,6 +106,7 @@ export class CatalogService {
       description?: string;
       sizes?: string;
       voice_aliases?: string;
+      returnable?: boolean;
       total_stock?: number;
       variants?: VariantInput[];
     },
@@ -135,8 +136,8 @@ export class CatalogService {
       }
       if (!categoryId || !this.db.prepare('SELECT id FROM categories WHERE id = ?').get(categoryId)) throw badRequest('Choose a category');
       const p = this.db
-        .prepare('INSERT INTO products (category_id, name, description, sizes, voice_aliases) VALUES (?, ?, ?, ?, ?) RETURNING id')
-        .get(categoryId, input.name, input.description ?? '', input.sizes ?? '', input.voice_aliases ?? '') as { id: number };
+        .prepare('INSERT INTO products (category_id, name, description, sizes, voice_aliases, returnable) VALUES (?, ?, ?, ?, ?, ?) RETURNING id')
+        .get(categoryId, input.name, input.description ?? '', input.sizes ?? '', input.voice_aliases ?? '', input.returnable ? 1 : 0) as { id: number };
       for (const v of variants) this.insertVariant(p.id, v, user);
       return { id: p.id, categoryCreated };
     })();

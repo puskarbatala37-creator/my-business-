@@ -26,6 +26,7 @@ const paths: Record<string, string> = {
   team: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM20 8v6M23 11h-6',
   filter: 'M3 5h18M6 12h12M10 19h4',
   download: 'M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3',
+  undo: 'M9 14 4 9l5-5M4 9h11a5 5 0 0 1 0 10h-3',
   wallet: 'M20 12V8H6a2 2 0 0 1 0-4h12v4M4 6v12a2 2 0 0 0 2 2h14v-4M18 12a2 2 0 0 0 0 4h4v-4z',
 };
 

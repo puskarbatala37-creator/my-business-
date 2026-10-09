@@ -1,4 +1,4 @@
-import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, platformLabel } from '@slay/shared';
+import { PAYMENT_STATUS_LABELS, platformLabel } from '@slay/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -8,7 +8,7 @@ import { Icon } from '../../components/Icon';
 import { Loading, Sheet, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { longDate, npr } from '../../lib/format';
-import { invoicePdf, invoicePng } from '../../lib/invoiceFile';
+import { invoiceItems, invoicePdf, invoicePng, paidMethods } from '../../lib/invoiceFile';
 import { isIOS, isStandalone } from '../../lib/pwa';
 import { saveFile, shareFile, shareOrCopy } from '../../lib/share';
 import type { OrderDetail } from '../../lib/types';
@@ -20,13 +20,14 @@ export function invoiceText(o: OrderDetail) {
     `Ordered via: ${platformLabel(o.platform)}`,
     `Customer: ${o.customer.name}${o.customer.phone ? ' (' + o.customer.phone + ')' : ''}`,
     '',
-    ...o.items.map((i) => `• ${i.product_name} – ${i.color}${i.size ? (i.sizes ? ', sizes ' : ', size ') + i.size : ''}: ${i.quantity} × ${npr(i.unit_price)} = ${npr(i.quantity * i.unit_price)}`),
+    ...invoiceItems(o).map((i) => `• ${i.product_name} – ${i.color}${i.size ? (i.sizes ? ', sizes ' : ', size ') + i.size : ''}: ${i.quantity} × ${npr(i.unit_price)} = ${npr(i.quantity * i.unit_price)}`),
     '',
     o.delivery_charge ? `Delivery: ${npr(o.delivery_charge)}` : '',
     o.discount ? `Discount: −${npr(o.discount)}` : '',
     `Total: ${npr(o.total)}`,
-    `Paid: ${npr(o.amount_paid)}`,
-    o.balance_due > 0 ? `Balance due${o.payment_status === 'unpaid' ? ' (cash on delivery)' : ''}: ${npr(o.balance_due)}` : 'Fully paid – thank you!',
+    `Paid: ${npr(o.amount_paid + o.refunded)}`,
+    o.refunded > 0 ? `Refunded: −${npr(o.refunded)}` : '',
+    o.refund_due > 0 ? `To be refunded: ${npr(o.refund_due)}` : o.balance_due > 0 ? `Balance due${o.payment_status === 'unpaid' ? ' (cash on delivery)' : ''}: ${npr(o.balance_due)}` : 'Fully paid – thank you!',
     o.tracking_number ? `Tracking no: ${o.tracking_number}` : '',
   ];
   return lines.filter((l, i, a) => l !== '' || a[i - 1] !== '').join('\n');
@@ -41,7 +42,7 @@ const makeFile = (o: OrderDetail, f: Format) => (f === 'pdf' ? invoicePdf(o) : i
  */
 function useInvoiceFiles(o: OrderDetail | undefined) {
   const cache = useRef<{ key: string; files: Partial<Record<Format, Promise<File>>> }>({ key: '', files: {} });
-  const key = o ? `${o.id}:${o.version}:${o.amount_paid}:${o.tracking_number}` : '';
+  const key = o ? `${o.id}:${o.version}:${o.amount_paid}:${o.refunded}:${o.tracking_number}` : '';
   const get = (f: Format) => {
     if (cache.current.key !== key) cache.current = { key, files: {} };
     const files = cache.current.files;
@@ -166,7 +167,7 @@ export function InvoicePage() {
               </tr>
             </thead>
             <tbody>
-              {o.items.map((i) => (
+              {invoiceItems(o).map((i) => (
                 <tr key={i.id}>
                   <td>
                     {i.product_name} – {i.color}
@@ -196,14 +197,20 @@ export function InvoicePage() {
                 <td className="r strong">{npr(o.total)}</td>
               </tr>
               <tr>
-                <td colSpan={3}>Paid{o.payments.length ? ` (${[...new Set(o.payments.map((p) => PAYMENT_METHOD_LABELS[p.method]))].join(', ')})` : ''}</td>
-                <td className="r">{npr(o.amount_paid)}</td>
+                <td colSpan={3}>Paid{paidMethods(o) ? ` (${paidMethods(o)})` : ''}</td>
+                <td className="r">{npr(o.amount_paid + o.refunded)}</td>
               </tr>
+              {o.refunded > 0 && (
+                <tr>
+                  <td colSpan={3}>Refunded</td>
+                  <td className="r">−{npr(o.refunded)}</td>
+                </tr>
+              )}
               <tr>
                 <td colSpan={3} className="strong">
-                  {o.payment_status === 'unpaid' ? 'Cash on delivery' : 'Balance due'}
+                  {o.refund_due > 0 ? 'To be refunded' : o.payment_status === 'unpaid' ? 'Cash on delivery' : 'Balance due'}
                 </td>
-                <td className="r strong">{npr(o.balance_due)}</td>
+                <td className="r strong">{npr(o.refund_due > 0 ? o.refund_due : o.balance_due)}</td>
               </tr>
             </tbody>
           </table>

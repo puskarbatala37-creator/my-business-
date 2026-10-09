@@ -9,7 +9,8 @@ import { FulfillmentBadge, Loading, MoneyInput, PaymentBadge, PlatformBadge, She
 import { api } from '../../lib/api';
 import { dateTime, longDate, npr, relativeDue, shortDate } from '../../lib/format';
 import { shareOrCopy } from '../../lib/share';
-import type { OrderDetail } from '../../lib/types';
+import type { OrderDetail, OrderItem } from '../../lib/types';
+import { CancelSheet, RefundSheet, ReturnSheet } from './AfterSale';
 
 interface PayRequest {
   id: number;
@@ -27,7 +28,7 @@ export function OrderDetailPage() {
   const toast = useToast();
   const q = useQuery({ queryKey: ['order', orderId], queryFn: () => api.get<OrderDetail>(`/api/orders/${orderId}`) });
   const requests = useQuery({ queryKey: ['order', orderId, 'pay-requests'], queryFn: () => api.get<{ requests: PayRequest[] }>(`/api/payments/orders/${orderId}/requests`) });
-  const [sheet, setSheet] = useState<null | 'pay' | 'send' | 'cancel'>(null);
+  const [sheet, setSheet] = useState<null | 'pay' | 'send' | 'cancel' | 'return' | 'refund'>(null);
   const [manualCopy, setManualCopy] = useState<string | null>(null);
 
   const update = (o: OrderDetail) => {
@@ -39,6 +40,7 @@ export function OrderDetailPage() {
     mutationFn: (fn: () => Promise<OrderDetail>) => fn(),
     onSuccess: (o) => {
       update(o);
+      qc.invalidateQueries({ queryKey: ['catalog'] }); // returns / cancellations can change stock
       setSheet(null);
     },
     onError: (e) => toast((e as Error).message, true),
@@ -48,6 +50,7 @@ export function OrderDetailPage() {
   if (!o) return <Loading error={q.error} retry={q.refetch} what="order" />;
   const active = o.state === 'active';
   const today = todayInBusinessTz();
+  const canReturn = active && o.items.some((i) => i.quantity - i.returned_qty > 0);
 
   async function esewaLink() {
     try {
@@ -97,13 +100,28 @@ export function OrderDetailPage() {
                 {npr(o.amount_paid)}
               </div>
             </div>
-            <div className="stat">
-              <div className="label">{o.payment_status === 'unpaid' ? 'Collect on delivery' : 'Still owed'}</div>
-              <div className="value" style={{ color: o.balance_due > 0 ? 'var(--bad)' : undefined }}>
-                {npr(o.balance_due)}
+            {o.refund_due > 0 ? (
+              <div className="stat">
+                <div className="label">To give back</div>
+                <div className="value" style={{ color: 'var(--warn)' }}>
+                  {npr(o.refund_due)}
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="stat">
+                <div className="label">{o.payment_status === 'unpaid' ? 'Collect on delivery' : 'Still owed'}</div>
+                <div className="value" style={{ color: o.balance_due > 0 ? 'var(--bad)' : undefined }}>
+                  {npr(o.balance_due)}
+                </div>
+              </div>
+            )}
           </div>
+          {o.refunded > 0 && <div className="small muted">Refunded so far: {npr(o.refunded)}</div>}
+          {o.refund_due > 0 && (
+            <button className="btn block" onClick={() => setSheet('refund')}>
+              <Icon name="wallet" size={18} /> Record refund · {npr(o.refund_due)}
+            </button>
+          )}
           {(o.delivery_due_date || o.prep_time_days !== null) && (
             <div className="row wrap small">
               {o.delivery_due_date && (
@@ -203,8 +221,12 @@ export function OrderDetailPage() {
                   <div className="small muted num">
                     {i.quantity} × {npr(i.unit_price)}
                   </div>
+                  <LineBadge item={i} />
                 </div>
-                <div className="strong num">{npr(i.quantity * i.unit_price)}</div>
+                <div className="right">
+                  {i.returned_qty > 0 && <div className="tiny muted num" style={{ textDecoration: 'line-through' }}>{npr(i.quantity * i.unit_price)}</div>}
+                  <div className="strong num">{npr((i.quantity - i.returned_qty) * i.unit_price)}</div>
+                </div>
               </div>
             ))}
           </div>
@@ -228,6 +250,36 @@ export function OrderDetailPage() {
           </div>
         </section>
 
+        {o.returns.length > 0 && (
+          <section>
+            <div className="section-title">
+              <h2>Returns & exchanges</h2>
+            </div>
+            <div className="list">
+              {o.returns.map((r) => (
+                <div key={r.id} className="list-item">
+                  <div className="grow">
+                    <div className="strong small">
+                      {r.kind === 'exchange' ? 'Exchange' : 'Return'} · {dateTime(r.created_at)}
+                    </div>
+                    <div className="small">
+                      Back: {r.items.map((x) => `${x.product_name} (${x.color}) ×${x.quantity}${x.restocked ? (x.restocked === x.quantity ? ', back in stock' : `, ${x.restocked} back in stock`) : ', not restocked'}`).join('; ')}
+                    </div>
+                    {r.replacements.length > 0 && (
+                      <div className="small">Instead: {r.replacements.map((x) => `${x.product_name} (${x.color}${x.size ? ` · ${x.size}` : ''}) ×${x.quantity}`).join('; ')}</div>
+                    )}
+                    {r.reason && <div className="small muted">“{r.reason}”</div>}
+                    <div className="tiny muted">
+                      {r.created_by_name ?? '—'}
+                      {r.refunded > 0 && ` · refunded ${npr(r.refunded)}`}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         {o.notes && (
           <section className="card">
             <h3>Notes</h3>
@@ -247,17 +299,21 @@ export function OrderDetailPage() {
                 <div key={p.id} className="list-item">
                   <div className="grow">
                     <div className="strong">
-                      {npr(p.amount)} · {PAYMENT_METHOD_LABELS[p.method] ?? p.method}
+                      {p.amount < 0 ? `Refund −${npr(-p.amount)}` : npr(p.amount)} · {PAYMENT_METHOD_LABELS[p.method] ?? p.method}
                     </div>
+                    {p.note && p.amount < 0 && <div className="small muted">{p.note}</div>}
                     <div className="tiny muted">
                       {dateTime(p.created_at)} · {p.created_by_name ?? (p.provider_ref ? `verified by eSewa (${p.provider_ref})` : 'system')}
                     </div>
                   </div>
-                  {!p.provider_ref && active && (
+                  {!p.provider_ref && (active || p.amount < 0) && (
                     <button
                       className="icon-btn"
-                      aria-label="Remove payment"
-                      onClick={() => confirm(`Remove the ${npr(p.amount)} payment?`) && run.mutate(() => api.del(`/api/orders/${orderId}/payments/${p.id}`))}
+                      aria-label={p.amount < 0 ? 'Remove refund' : 'Remove payment'}
+                      onClick={() =>
+                        confirm(p.amount < 0 ? `Remove the ${npr(-p.amount)} refund? Only do this if it was recorded by mistake.` : `Remove the ${npr(p.amount)} payment?`) &&
+                        run.mutate(() => api.del(`/api/orders/${orderId}/payments/${p.id}`))
+                      }
                     >
                       <Icon name="trash" size={18} />
                     </button>
@@ -299,6 +355,21 @@ export function OrderDetailPage() {
             </button>
           )}
         </div>
+        {/* Optional after-sale actions – only needed when a customer sends something back. */}
+        {(canReturn || (o.amount_paid > 0 && o.refund_due === 0)) && (
+          <div className="btn-row">
+            {canReturn && (
+              <button className="btn" onClick={() => setSheet('return')}>
+                <Icon name="undo" size={18} /> Return / exchange
+              </button>
+            )}
+            {o.amount_paid > 0 && o.refund_due === 0 && (
+              <button className="btn" onClick={() => setSheet('refund')}>
+                <Icon name="wallet" size={18} /> Refund
+              </button>
+            )}
+          </div>
+        )}
         <div className="tiny muted center">
           Added by {o.created_by_name ?? '—'} · {dateTime(o.created_at)}
         </div>
@@ -307,7 +378,35 @@ export function OrderDetailPage() {
       {sheet === 'pay' && <PaymentSheet balance={o.balance_due} onClose={() => setSheet(null)} onSave={(amount, method) => run.mutate(() => api.post(`/api/orders/${orderId}/payments`, { amount, method }))} />}
       {manualCopy && <CopySheet title="eSewa payment link" text={manualCopy} onClose={() => setManualCopy(null)} />}
       {sheet === 'send' && <SendSheet initial={o.tracking_number} onClose={() => setSheet(null)} onSave={(tracking) => run.mutate(() => api.patch(`/api/orders/${orderId}`, { fulfillment_status: 'sent', tracking_number: tracking }))} />}
-      {sheet === 'cancel' && <CancelSheet onClose={() => setSheet(null)} onSave={(reason) => run.mutate(() => api.post(`/api/orders/${orderId}/cancel`, { reason }))} />}
+      {sheet === 'cancel' && <CancelSheet order={o} saving={run.isPending} onClose={() => setSheet(null)} onSave={(b) => run.mutate(() => api.post(`/api/orders/${orderId}/cancel`, b))} />}
+      {sheet === 'return' && (
+        <ReturnSheet
+          order={o}
+          saving={run.isPending}
+          onClose={() => setSheet(null)}
+          onSave={(b) =>
+            run.mutate(async () => {
+              const res = await api.post<OrderDetail>(`/api/orders/${orderId}/returns`, b);
+              toast(b.kind === 'exchange' ? 'Exchange saved' : 'Return saved');
+              return res;
+            })
+          }
+        />
+      )}
+      {sheet === 'refund' && (
+        <RefundSheet
+          order={o}
+          saving={run.isPending}
+          onClose={() => setSheet(null)}
+          onSave={(b) =>
+            run.mutate(async () => {
+              const res = await api.post<OrderDetail>(`/api/orders/${orderId}/refunds`, b);
+              toast('Refund saved');
+              return res;
+            })
+          }
+        />
+      )}
     </>
   );
 }
@@ -361,20 +460,11 @@ function SendSheet({ initial, onClose, onSave }: { initial: string; onClose: () 
   );
 }
 
-function CancelSheet({ onClose, onSave }: { onClose: () => void; onSave: (reason: string) => void }) {
-  const [reason, setReason] = useState('');
-  return (
-    <Sheet title="Cancel order?" onClose={onClose}>
-      <div className="stack">
-        <div className="small muted">The items go back into stock. This cannot be undone.</div>
-        <label className="field">
-          Reason
-          <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} />
-        </label>
-        <button className="btn primary block" style={{ background: 'var(--bad)', borderColor: 'var(--bad)' }} onClick={() => onSave(reason)}>
-          Cancel order
-        </button>
-      </div>
-    </Sheet>
-  );
+/** Shows when pieces of a line came back, or that it's an exchange replacement. */
+function LineBadge({ item: i }: { item: OrderItem }) {
+  if (i.return_id) return <span className="badge info">Exchange replacement</span>;
+  if (!i.returned_qty) return null;
+  const all = i.returned_qty === i.quantity;
+  const word = i.status === 'exchanged' ? 'exchanged' : 'returned';
+  return <span className="badge warn">{all ? word[0].toUpperCase() + word.slice(1) : `${i.returned_qty} of ${i.quantity} ${word}`}</span>;
 }
