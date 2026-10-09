@@ -9,6 +9,7 @@ import { ordersModule } from './orders/index.js';
 import { payModule, paymentsModule } from './payments/index.js';
 import { receiptsModule } from './receipts/index.js';
 import { securityModule } from './security/index.js';
+import { systemModule } from './system/index.js';
 import { uploadsModule } from './uploads/index.js';
 import { voiceModule } from './voice/index.js';
 
@@ -31,4 +32,5 @@ export const modules: AppModule[] = [
   voiceModule,
   uploadsModule,
   liveModule,
+  systemModule,
 ];

@@ -38,7 +38,11 @@ export class SmsService {
     if (this.cfg.provider === 'sparrow') {
       const body = new URLSearchParams({ token: this.cfg.sparrowToken, from: this.cfg.sparrowFrom, to: to.replace(/^\+977/, ''), text });
       const res = await this.fetchImpl('https://api.sparrowsms.com/v2/sms/', { method: 'POST', body, signal: AbortSignal.timeout(15_000) });
-      if (!res.ok) throw new Error(`Sparrow SMS failed (HTTP ${res.status})`);
+      // Sparrow answers {"response_code": 200, ...} on success, and a code + "response" message otherwise.
+      const data = await readJson(res);
+      if (!res.ok || (data?.response_code !== undefined && Number(data.response_code) !== 200)) {
+        throw new Error(`Sparrow SMS refused the message: ${data?.response ?? `HTTP ${res.status}`}${data?.response_code ? ` (code ${data.response_code})` : ''}`);
+      }
       return;
     }
     if (this.cfg.provider === 'twilio') {
@@ -50,9 +54,20 @@ export class SmsService {
         body,
         signal: AbortSignal.timeout(15_000),
       });
-      if (!res.ok) throw new Error(`Twilio SMS failed (HTTP ${res.status})`);
+      if (!res.ok) {
+        const data = await readJson(res);
+        throw new Error(`Twilio refused the message: ${data?.message ?? `HTTP ${res.status}`}${data?.code ? ` (code ${data.code})` : ''}`);
+      }
       return;
     }
     console.log(`[sms:log] to ${to}: ${text}`);
+  }
+}
+
+async function readJson(res: Response): Promise<any> {
+  try {
+    return JSON.parse(await res.text());
+  } catch {
+    return null;
   }
 }

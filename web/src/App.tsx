@@ -10,6 +10,7 @@ import { CustomerPage, CustomersPage } from './features/customers/CustomersPage'
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { MorePage } from './features/more/MorePage';
 import { NotificationsPage } from './features/more/NotificationsPage';
+import { SetupCheckPage } from './features/more/SetupCheckPage';
 import { SecurityPage } from './features/more/SecurityPage';
 import { TeamPage } from './features/more/TeamPage';
 import { InvoicePage } from './features/orders/InvoicePage';
@@ -75,6 +76,7 @@ export function App() {
         <Route path="more/security" element={<SecurityPage />} />
         <Route path="more/team" element={<TeamPage />} />
         <Route path="more/notifications" element={<NotificationsPage />} />
+        <Route path="more/setup" element={<SetupCheckPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Route>
     </Routes>

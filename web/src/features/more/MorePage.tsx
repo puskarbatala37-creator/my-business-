@@ -16,6 +16,8 @@ const LINKS = [
   { to: '/more/security', icon: 'shield', label: 'Security', sub: 'Fingerprint / face sign-in, alerts, devices' },
 ];
 
+const OWNER_LINKS = [{ to: '/more/setup', icon: 'check', label: 'Setup check', sub: 'Is SMS, email & notifications working? Send test messages' }];
+
 export function MorePage() {
   const { me } = useAuth();
   const qc = useQueryClient();
@@ -39,7 +41,7 @@ export function MorePage() {
           </button>
         )}
         <div className="list">
-          {LINKS.map((l) => (
+          {[...LINKS, ...(me?.user.role === 'owner' ? OWNER_LINKS : [])].map((l) => (
             <Link key={l.to} to={l.to} className="list-item">
               <span className="thumb" style={{ width: 40, height: 40 }}>
                 <Icon name={l.icon} />

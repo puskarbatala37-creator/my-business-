@@ -56,6 +56,8 @@ To test on your phone during development, open `http://<your-computer-ip>:5173` 
 
 ### Deploying
 
+**Step-by-step guide (Railway + Sparrow SMS): [docs/DEPLOY.md](docs/DEPLOY.md). Then test on real phones with [docs/PHONE-TEST.md](docs/PHONE-TEST.md).** Owners can check what is set up, and send a real test SMS, test email and test notification, under **More → Setup check**.
+
 The production build is a single Node server that serves both the API and the app:
 
 ```bash
