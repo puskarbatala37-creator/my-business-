@@ -1,62 +1,117 @@
-import { addDays, money, todayInBusinessTz } from '@slay/shared';
-import { Router } from 'express';
-import type { AppContext, AppModule } from '../../core/context.js';
+import { addDays, money, todayInBusinessTz } from "@slay/shared";
+import { Router } from "express";
+import { z } from "zod";
+import type { AppContext, AppModule } from "../../core/context.js";
+import { badRequest, parse, zDate } from "../../core/http.js";
 
 function monthStart(isoDate: string, monthsBack: number) {
-  const [y, m] = isoDate.split('-').map(Number);
+  const [y, m] = isoDate.split("-").map(Number);
   const d = new Date(Date.UTC(y, m - 1 - monthsBack, 1));
   return d.toISOString().slice(0, 10);
 }
 
-export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
-  const { db } = ctx;
-  const sales = (from: string, to: string) => {
-    const r = db
-      .prepare(
-        `SELECT COUNT(*) AS orders, COALESCE(SUM(total), 0) AS sales, COALESCE(SUM(amount_paid), 0) AS collected,
+/** Months shown in the sales chart: the last 6 or 12, or every month since the first order. */
+export type ChartRange = "6" | "12" | "all";
+
+/** Sales, orders, money collected, item cost and profit for orders dated from..to (inclusive). No limit on how far back. */
+export function salesBetween(ctx: AppContext, from: string, to: string) {
+  const r = ctx.db
+    .prepare(
+      `SELECT COUNT(*) AS orders, COALESCE(SUM(total), 0) AS sales, COALESCE(SUM(amount_paid), 0) AS collected,
                 COALESCE(SUM(delivery_charge), 0) AS delivery,
                 -- Pieces returned and put back in stock cost nothing; ones that couldn't be resold still do.
                 COALESCE(SUM((SELECT SUM(i.unit_cost * (i.quantity - i.restocked_qty)) FROM order_items i WHERE i.order_id = o.id)), 0) AS cost
            FROM orders o WHERE state IN ('active', 'returned') AND order_date BETWEEN ? AND ?`,
-      )
-      .get(from, to) as any;
-    return { orders: r.orders, sales: money(r.sales), collected: money(r.collected), cost: money(r.cost), 
-      // Delivery charges are passed on to the courier, so they are not profit. (Discounts already lower the sales.)
-      gross_profit: money(r.sales - r.delivery - r.cost) };
+    )
+    .get(from, to) as any;
+  return {
+    orders: r.orders,
+    sales: money(r.sales),
+    collected: money(r.collected),
+    cost: money(r.cost),
+    // Delivery charges are passed on to the courier, so they are not profit. (Discounts already lower the sales.)
+    gross_profit: money(r.sales - r.delivery - r.cost),
   };
+}
+
+/** Date of the oldest order that counts towards sales (null when there are none yet). */
+export function firstOrderDate(ctx: AppContext): string | null {
+  const r = ctx.db
+    .prepare(
+      `SELECT MIN(order_date) AS d FROM orders WHERE state IN ('active', 'returned')`,
+    )
+    .get() as { d: string | null };
+  return r.d;
+}
+
+export function dashboardSummary(
+  ctx: AppContext,
+  today = todayInBusinessTz(),
+  chart: ChartRange = "12",
+) {
+  const { db } = ctx;
+  const sales = (from: string, to: string) => salesBetween(ctx, from, to);
 
   const thisMonth = monthStart(today, 0);
   const sixMonths = monthStart(today, 5);
+  const twelveMonths = monthStart(today, 11);
+  const first = firstOrderDate(ctx);
+  // The chart: last 6 / 12 months, or every month back to the first order.
+  const monthsBack =
+    chart === "all" && first
+      ? Math.max(
+          0,
+          (Number(today.slice(0, 4)) - Number(first.slice(0, 4))) * 12 +
+            Number(today.slice(5, 7)) -
+            Number(first.slice(5, 7)),
+        )
+      : chart === "6"
+        ? 5
+        : 11;
+  const chartFrom = monthStart(today, monthsBack);
 
   const byMonth = db
     .prepare(
       `SELECT substr(order_date, 1, 7) AS month, COUNT(*) AS orders, COALESCE(SUM(total), 0) AS sales
          FROM orders WHERE state IN ('active', 'returned') AND order_date >= ? GROUP BY month ORDER BY month`,
     )
-    .all(sixMonths) as { month: string; orders: number; sales: number }[];
+    .all(chartFrom) as { month: string; orders: number; sales: number }[];
   const spendByMonth = db
     .prepare(
       `SELECT substr(datetime(captured_at, '+5 hours', '+45 minutes'), 1, 7) AS month, COALESCE(SUM(amount), 0) AS spent
          FROM receipts WHERE date(captured_at, '+5 hours', '+45 minutes') >= ? GROUP BY month`,
     )
-    .all(sixMonths) as { month: string; spent: number }[];
-  const months = Array.from({ length: 6 }, (_, i) => monthStart(today, 5 - i).slice(0, 7)).map((month) => {
+    .all(chartFrom) as { month: string; spent: number }[];
+  const months = Array.from({ length: monthsBack + 1 }, (_, i) =>
+    monthStart(today, monthsBack - i).slice(0, 7),
+  ).map((month) => {
     const s = byMonth.find((m) => m.month === month);
     const sp = spendByMonth.find((m) => m.month === month);
-    return { month, orders: s?.orders ?? 0, sales: money(s?.sales ?? 0), receipts_spent: money(sp?.spent ?? 0) };
+    return {
+      month,
+      orders: s?.orders ?? 0,
+      sales: money(s?.sales ?? 0),
+      receipts_spent: money(sp?.spent ?? 0),
+    };
   });
 
   const weekFrom = addDays(today, -6);
   const byDay = db
-    .prepare(`SELECT order_date AS date, COALESCE(SUM(total), 0) AS sales, COUNT(*) AS orders FROM orders WHERE state IN ('active', 'returned') AND order_date >= ? GROUP BY order_date`)
+    .prepare(
+      `SELECT order_date AS date, COALESCE(SUM(total), 0) AS sales, COUNT(*) AS orders FROM orders WHERE state IN ('active', 'returned') AND order_date >= ? GROUP BY order_date`,
+    )
     .all(weekFrom) as { date: string; sales: number; orders: number }[];
-  const days = Array.from({ length: 7 }, (_, i) => addDays(weekFrom, i)).map((date) => {
-    const d = byDay.find((x) => x.date === date);
-    return { date, sales: money(d?.sales ?? 0), orders: d?.orders ?? 0 };
-  });
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekFrom, i)).map(
+    (date) => {
+      const d = byDay.find((x) => x.date === date);
+      return { date, sales: money(d?.sales ?? 0), orders: d?.orders ?? 0 };
+    },
+  );
 
   const outstanding = db
-    .prepare(`SELECT COUNT(*) AS n, COALESCE(SUM(total - amount_paid), 0) AS due FROM orders WHERE state = 'active' AND payment_status <> 'paid'`)
+    .prepare(
+      `SELECT COUNT(*) AS n, COALESCE(SUM(total - amount_paid), 0) AS due FROM orders WHERE state = 'active' AND payment_status <> 'paid'`,
+    )
     .get() as any;
   // Money owed back to customers: paid on a cancelled order, or more paid than an order is worth after a return.
   const refundsDue = db
@@ -65,7 +120,11 @@ export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
         WHERE amount_paid > CASE WHEN state = 'cancelled' THEN 0 ELSE total END + 0.001`,
     )
     .get() as any;
-  const toSend = db.prepare(`SELECT COUNT(*) AS n FROM orders WHERE state = 'active' AND fulfillment_status = 'pending'`).get() as any;
+  const toSend = db
+    .prepare(
+      `SELECT COUNT(*) AS n FROM orders WHERE state = 'active' AND fulfillment_status = 'pending'`,
+    )
+    .get() as any;
   const dueSoon = db
     .prepare(
       `SELECT o.id, o.invoice_no, o.delivery_due_date, c.name AS customer_name FROM orders o JOIN customers c ON c.id = o.customer_id
@@ -84,6 +143,9 @@ export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
     today: { date: today, ...sales(today, today) },
     month: { from: thisMonth, ...sales(thisMonth, today) },
     six_months: { from: sixMonths, ...sales(sixMonths, today) },
+    twelve_months: { from: twelveMonths, ...sales(twelveMonths, today) },
+    all_time: { from: first, ...sales(first ?? today, today) },
+    chart,
     months,
     days,
     outstanding: { orders: outstanding.n, amount: money(outstanding.due) },
@@ -95,10 +157,31 @@ export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
 }
 
 export const dashboardModule: AppModule = {
-  name: 'dashboard',
+  name: "dashboard",
   routes(ctx) {
     const r = Router();
-    r.get('/', (_req, res) => res.json(dashboardSummary(ctx)));
+    r.get("/", (req, res) => {
+      const q = parse(
+        z.object({ chart: z.enum(["6", "12", "all"]).optional() }),
+        req.query,
+      );
+      res.json(dashboardSummary(ctx, todayInBusinessTz(), q.chart ?? "12"));
+    });
+    // Totals for any dates, however long ago. No dates = everything since the first order.
+    r.get("/period", (req, res) => {
+      const q = parse(
+        z.object({ from: zDate.optional(), to: zDate.optional() }),
+        req.query,
+      );
+      const today = todayInBusinessTz();
+      const from = q.from ?? firstOrderDate(ctx) ?? today;
+      const to = q.to ?? today;
+      if (from > to)
+        throw badRequest(
+          "The “from” date is after the “to” date. Swap them and try again.",
+        );
+      res.json({ from, to, ...salesBetween(ctx, from, to) });
+    });
     return r;
   },
 };

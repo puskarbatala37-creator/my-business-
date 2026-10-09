@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { HeaderActions } from '../../components/Layout';
-import { Loading, StockBadge, Thumb, TopBar } from '../../components/ui';
+import { Loading, Seg, Sheet, StockBadge, Thumb, TopBar } from '../../components/ui';
 import { api } from '../../lib/api';
 import { useAuth } from '../../lib/auth';
 import { monthLabel, npr, relativeDue, shortDate } from '../../lib/format';
+import { datePresets } from '../../lib/periods';
 import { daysSinceDownload, useBackups } from '../more/BackupsPage';
 
 interface Period {
@@ -19,6 +20,9 @@ interface Summary {
   today: Period & { date: string };
   month: Period & { from: string };
   six_months: Period & { from: string };
+  twelve_months: Period & { from: string };
+  /** Since the very first order (`from` is null before there are any). */
+  all_time: Period & { from: string | null };
   months: { month: string; orders: number; sales: number; receipts_spent: number }[];
   days: { date: string; sales: number; orders: number }[];
   outstanding: { orders: number; amount: number };
@@ -33,6 +37,11 @@ const compact = (n: number) => (n >= 100000 ? `${(n / 100000).toFixed(1)}L` : n 
 /** Single-series bar chart. Tap a bar to see its exact value (the title names the series, so no legend). */
 function Bars({ data, label }: { data: { key: string; label: string; value: number; sub?: string }[]; label: string }) {
   const [sel, setSel] = useState<string | null>(null);
+  // Long ranges (all time) scroll sideways, starting at the latest month.
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (scroller.current) scroller.current.scrollLeft = scroller.current.scrollWidth;
+  }, [data.length]);
   const max = Math.max(1, ...data.map((d) => d.value));
   const selected = data.find((d) => d.key === sel) ?? data[data.length - 1];
   return (
@@ -44,7 +53,7 @@ function Bars({ data, label }: { data: { key: string; label: string; value: numb
           {selected.sub ? <span className="muted"> · {selected.sub}</span> : null}
         </span>
       </div>
-      <div className="bars" role="img" aria-label={`${label}: ${data.map((d) => `${d.label} ${npr(d.value)}`).join(', ')}`}>
+      <div ref={scroller} className={`bars ${data.length > 12 ? 'scroll' : ''}`} role="img" aria-label={`${label}: ${data.map((d) => `${d.label} ${npr(d.value)}`).join(', ')}`}>
         {data.map((d) => (
           <button key={d.key} type="button" className={`bar-col ${selected.key === d.key ? 'sel' : ''}`} onClick={() => setSel(d.key)} title={`${d.label}: ${npr(d.value)}`}>
             {d.value > 0 && selected.key === d.key && <span className="bar-value">{compact(d.value)}</span>}
@@ -71,7 +80,8 @@ function Stat({ label, p }: { label: string; p: Period }) {
 
 export function DashboardPage() {
   const { me } = useAuth();
-  const q = useQuery({ queryKey: ['dashboard'], queryFn: () => api.get<Summary>('/api/dashboard') });
+  const [chart, setChart] = useState<'6' | '12' | 'all'>('12');
+  const q = useQuery({ queryKey: ['dashboard', chart], queryFn: () => api.get<Summary>(`/api/dashboard?chart=${chart}`), placeholderData: (prev) => prev });
   const d = q.data;
   // Owners: a weekly nudge to keep a copy of the data off the server.
   const backups = useBackups();
@@ -100,7 +110,7 @@ export function DashboardPage() {
               <div className="stats">
                 <Stat label="Today" p={d.today} />
                 <Stat label="This month" p={d.month} />
-                <Stat label="6 months" p={d.six_months} />
+                <Stat label="12 months" p={d.twelve_months} />
               </div>
               <div className="grid-2 mt">
                 <div className="stat">
@@ -127,8 +137,31 @@ export function DashboardPage() {
               )}
             </div>
 
+            <PeriodCard allTime={d.all_time} today={d.today.date} />
+
             <div className="card">
-              <Bars label="Sales per month (last 6)" data={d.months.map((m) => ({ key: m.month, label: monthLabel(m.month), value: m.sales, sub: `${m.orders} order${m.orders === 1 ? "" : "s"}` }))} />
+              <div className="stack" style={{ gap: 8, marginBottom: 8 }}>
+                <span className="strong small">Sales per month</span>
+                <Seg
+                  value={chart}
+                  onChange={setChart}
+                  options={[
+                    { value: '6', label: '6 months' },
+                    { value: '12', label: '12 months' },
+                    { value: 'all', label: 'All' },
+                  ]}
+                />
+              </div>
+              <Bars
+                label={chart === 'all' ? `Since ${d.months[0] ? monthYear(d.months[0].month) : 'the start'}` : `Last ${chart} months`}
+                data={d.months.map((m) => ({
+                  key: m.month,
+                  // Once the chart spans more than one year, January shows its year.
+                  label: d.months.length > 12 && m.month.endsWith('-01') ? `${monthLabel(m.month)} ’${m.month.slice(2, 4)}` : monthLabel(m.month),
+                  value: m.sales,
+                  sub: `${monthYear(m.month)} · ${m.orders} order${m.orders === 1 ? '' : 's'}`,
+                }))}
+              />
             </div>
             <div className="card mt">
               <Bars label="Sales per day (last 7)" data={d.days.map((x) => ({ key: x.date, label: shortDate(x.date).split(' ')[0], value: x.sales, sub: `${x.orders} order${x.orders === 1 ? "" : "s"}` }))} />
@@ -181,5 +214,108 @@ export function DashboardPage() {
         )}
       </main>
     </>
+  );
+}
+
+const monthYear = (ym: string) => new Date(ym + '-01T00:00:00Z').toLocaleDateString('en-GB', { month: 'short', year: 'numeric', timeZone: 'UTC' });
+
+/** Sales, profit and money collected for any stretch of dates – all time by default, however far back. */
+function PeriodCard({ allTime, today }: { allTime: Period & { from: string | null }; today: string }) {
+  const presets = datePresets(today).filter((p) => ['month', 'last-month', '6m', '12m', 'year', 'last-year'].includes(p.key));
+  const [range, setRange] = useState<{ from: string; to: string; label: string }>({ from: '', to: '', label: 'All time' });
+  const [picking, setPicking] = useState(false);
+  const all = !range.from && !range.to;
+  const q = useQuery({
+    queryKey: ['dashboard', 'period', range.from, range.to],
+    queryFn: () => api.get<Period & { from: string; to: string }>(`/api/dashboard/period?${new URLSearchParams({ ...(range.from && { from: range.from }), ...(range.to && { to: range.to }) })}`),
+    enabled: !all,
+  });
+  const p = all ? allTime : q.data;
+  const since = all ? allTime.from : range.from;
+  return (
+    <div className="card mt">
+      <div className="row between">
+        <span className="strong small">Sales for any dates</span>
+        <button type="button" className="btn sm" onClick={() => setPicking(true)} aria-label={`Change dates (now: ${range.label})`}>
+          {range.label}
+        </button>
+      </div>
+      <div className="tiny muted" style={{ marginTop: 2 }}>
+        {all ? (since ? `Since the first order, ${shortDate(since)}` : 'No orders yet') : `${shortDate(range.from)} – ${shortDate(range.to)}`}
+      </div>
+      {!p ? (
+        <div className="small muted mt">{q.error ? (q.error as Error).message : 'Adding up…'}</div>
+      ) : (
+        <div className="grid-2 mt">
+          <div className="stat">
+            <div className="label">Sales</div>
+            <div className="value">{npr(p.sales)}</div>
+            <div className="sub">
+              {p.orders} order{p.orders === 1 ? '' : 's'}
+            </div>
+          </div>
+          <div className="stat">
+            <div className="label">Profit</div>
+            <div className="value">{npr(p.gross_profit)}</div>
+            <div className="sub">collected {npr(p.collected)}</div>
+          </div>
+        </div>
+      )}
+      <Link className="small" style={{ display: 'inline-block', marginTop: 8 }} to={`/orders?state=all${range.from ? `&from=${range.from}&to=${range.to}` : ''}`}>
+        See these orders
+      </Link>
+      {picking && <PeriodSheet presets={presets} current={range} onClose={() => setPicking(false)} onPick={(r) => (setRange(r), setPicking(false))} today={today} />}
+    </div>
+  );
+}
+
+function PeriodSheet({
+  presets,
+  current,
+  today,
+  onPick,
+  onClose,
+}: {
+  presets: { key: string; label: string; from: string; to: string }[];
+  current: { from: string; to: string };
+  today: string;
+  onPick: (r: { from: string; to: string; label: string }) => void;
+  onClose: () => void;
+}) {
+  const [from, setFrom] = useState(current.from);
+  const [to, setTo] = useState(current.to || today);
+  return (
+    <Sheet title="Sales for which dates?" onClose={onClose}>
+      <div className="stack">
+        <div className="chips" style={{ flexWrap: 'wrap' }}>
+          <button type="button" className={`chip ${!current.from ? 'on' : ''}`} onClick={() => onPick({ from: '', to: '', label: 'All time' })}>
+            All time
+          </button>
+          {presets.map((p) => (
+            <button key={p.key} type="button" className={`chip ${current.from === p.from && current.to === p.to ? 'on' : ''}`} onClick={() => onPick(p)}>
+              {p.label}
+            </button>
+          ))}
+        </div>
+        <div className="grid-2">
+          <label className="field">
+            From
+            <input className="input" type="date" max={to || today} value={from} onChange={(e) => setFrom(e.target.value)} />
+          </label>
+          <label className="field">
+            To
+            <input className="input" type="date" min={from || undefined} max={today} value={to} onChange={(e) => setTo(e.target.value)} />
+          </label>
+        </div>
+        <button
+          type="button"
+          className="btn primary block"
+          disabled={!from || !to || from > to}
+          onClick={() => onPick({ from, to, label: from === to ? shortDate(from) : `${shortDate(from)} – ${shortDate(to)}` })}
+        >
+          Show these dates
+        </button>
+      </div>
+    </Sheet>
   );
 }

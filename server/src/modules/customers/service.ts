@@ -52,8 +52,8 @@ export class CustomerService {
     return this.ctx.db.prepare('SELECT * FROM customers WHERE phone = ?').get(p) as { id: number } | undefined;
   }
 
-  /** Order history for a customer – newest first. */
-  history(customerId: number, limit = 100) {
+  /** Order history for a customer – newest first. Every order, however old, unless a limit is given. */
+  history(customerId: number, limit = -1) {
     return this.ctx.db
       .prepare(
         `SELECT o.id, o.invoice_no, o.order_date, o.total, o.amount_paid, o.payment_status, o.fulfillment_status, o.state, o.platform,

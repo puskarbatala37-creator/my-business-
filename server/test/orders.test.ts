@@ -119,7 +119,8 @@ describe('orders & stock', () => {
     expect(d.today.gross_profit).toBe(1200);
     expect(d.month.sales).toBe(3000);
     expect(d.six_months.sales).toBe(3000);
-    expect(d.months).toHaveLength(6);
+    expect(d.months).toHaveLength(12); // the chart shows a year by default
+    expect((await teza.get('/api/dashboard?chart=6')).body.months).toHaveLength(6);
     expect(d.outstanding.amount).toBe(9999);
     void ctx;
   });

@@ -18,7 +18,7 @@ export function GuidePage() {
           <p>The bar at the bottom takes you everywhere:</p>
           <ul>
             <li>
-              <b>Home</b> – today’s sales, money still to collect, orders to send.
+              <b>Home</b> – today’s sales, money still to collect, orders to send. <b>Sales for any dates</b> adds up any period, all the way back to your first order.
             </li>
             <li>
               <b>Orders</b> – every order, newest first.

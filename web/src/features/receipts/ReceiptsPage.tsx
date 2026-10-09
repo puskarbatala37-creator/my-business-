@@ -17,6 +17,7 @@ const RANGES = [
   { key: '30', label: '30 days', days: 29 },
   { key: 'month', label: 'This month' },
   { key: '180', label: '6 months', days: 179 },
+  { key: '365', label: '12 months', days: 364 },
 ];
 
 function rangeFrom(key: string) {

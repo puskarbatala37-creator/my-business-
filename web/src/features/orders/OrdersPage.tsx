@@ -8,6 +8,7 @@ import { useCatalog } from '../../components/VariantPicker';
 import { Empty, FulfillmentBadge, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar } from '../../components/ui';
 import { api, qs } from '../../lib/api';
 import { npr, shortDate } from '../../lib/format';
+import { datePresets } from '../../lib/periods';
 import type { OrderSearchResult, OrderSummary } from '../../lib/types';
 
 /** Quick status views. Each maps to URL parameters, so the dashboard can link straight into them. */
@@ -24,20 +25,6 @@ const STATUS = [
   { key: 'refund', label: 'To refund', params: { refund: 'due', state: 'all' } },
 ] as const;
 const STATUS_KEYS = ['fulfillment', 'payment', 'state', 'refund'];
-
-/** Order date shortcuts; "custom" uses the From / To dates. */
-function datePresets(today: string) {
-  const monthStart = today.slice(0, 8) + '01';
-  const [y, m] = today.split('-').map(Number);
-  const sixMonths = new Date(Date.UTC(y, m - 1 - 5, 1)).toISOString().slice(0, 10);
-  return [
-    { key: 'today', label: 'Today', from: today, to: today },
-    { key: 'yesterday', label: 'Yesterday', from: addDays(today, -1), to: addDays(today, -1) },
-    { key: '7d', label: 'Last 7 days', from: addDays(today, -6), to: today },
-    { key: 'month', label: 'This month', from: monthStart, to: today },
-    { key: '6m', label: 'Last 6 months', from: sixMonths, to: today },
-  ];
-}
 
 export function useDebounced<T>(value: T, ms = 250) {
   const [v, setV] = useState(value);
@@ -257,7 +244,7 @@ function FiltersSheet({ today, value, onApply, onClose }: { today: string; value
           <h3>Order date</h3>
           <div className="chips" style={{ flexWrap: 'wrap' }}>
             <button type="button" className={`chip ${presetKey === 'any' && !custom ? 'on' : ''}`} onClick={() => (setCustom(false), setF({ ...f, from: '', to: '' }))}>
-              Any date
+              All time
             </button>
             {presets.map((p) => (
               <button key={p.key} type="button" className={`chip ${presetKey === p.key && !custom ? 'on' : ''}`} onClick={() => (setCustom(false), setF({ ...f, from: p.from, to: p.to }))}>

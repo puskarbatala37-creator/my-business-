@@ -2,10 +2,13 @@ import { BUSINESS_TIMEZONE, formatNPR } from '@slay/shared';
 
 export const npr = formatNPR;
 
+/** "9 Oct" – with the year ("9 Oct 2024") when it isn't this year, so old orders are never mistaken for recent ones. */
 export function shortDate(iso: string | null | undefined) {
   if (!iso) return '';
   const d = iso.length === 10 ? new Date(iso + 'T00:00:00+05:45') : new Date(iso);
-  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: BUSINESS_TIMEZONE });
+  const year = (x: Date) => x.toLocaleDateString('en-GB', { year: 'numeric', timeZone: BUSINESS_TIMEZONE });
+  const otherYear = year(d) !== year(new Date());
+  return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', ...(otherYear && { year: 'numeric' }), timeZone: BUSINESS_TIMEZONE });
 }
 
 export function longDate(iso: string | null | undefined) {
