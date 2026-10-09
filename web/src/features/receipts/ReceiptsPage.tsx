@@ -36,7 +36,7 @@ export function ReceiptsPage() {
   const q = useDebounced(search);
   const list = useQuery({
     queryKey: ['receipts', q, range],
-    queryFn: () => api.get<{ receipts: Receipt[]; total: number; count: number; categories: string[] }>(`/api/receipts${qs({ q, from: rangeFrom(range) })}`),
+    queryFn: () => api.get<{ receipts: Receipt[]; total: number; count: number }>(`/api/receipts${qs({ q, from: rangeFrom(range) })}`),
   });
 
   return (
@@ -99,7 +99,10 @@ export function ReceiptsPage() {
                 <img src={r.photo} alt="" loading="lazy" />
                 <div className="meta">
                   <div className="strong small ellipsis">{r.supplier || 'Supplier bill'}</div>
-                  <div className="small num">{npr(r.amount)}</div>
+                  <div className="small num">
+                    {npr(r.amount)}
+                    {r.category && <span className="muted"> · {r.category}</span>}
+                  </div>
                   <div className="tiny muted">{dateTime(r.captured_at)}</div>
                 </div>
               </button>
@@ -107,18 +110,19 @@ export function ReceiptsPage() {
           </div>
         )}
       </main>
-      {draft && <ReceiptForm draft={draft} categories={list.data?.categories ?? []} onClose={() => setDraft(null)} />}
+      {draft && <ReceiptForm draft={draft} onClose={() => setDraft(null)} />}
       {view && <ReceiptView r={view} onClose={() => setView(null)} />}
     </>
   );
 }
 
-function ReceiptForm({ draft, categories, onClose }: { draft: { photo: string; captured_at: string }; categories: string[]; onClose: () => void }) {
+function ReceiptForm({ draft, onClose }: { draft: { photo: string; captured_at: string }; onClose: () => void }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [supplier, setSupplier] = useState('');
   const [amount, setAmount] = useState<number | ''>('');
   const [category, setCategory] = useState('');
+  const [newType, setNewType] = useState<string | null>(null);
   const [notes, setNotes] = useState('');
   const [busy, setBusy] = useState(false);
   return (
@@ -129,7 +133,9 @@ function ReceiptForm({ draft, categories, onClose }: { draft: { photo: string; c
           e.preventDefault();
           setBusy(true);
           try {
-            await api.post('/api/receipts', { ...draft, supplier, amount: Number(amount) || 0, category, notes });
+            // A new type typed here is added to everyone's choices when the bill is saved.
+            const type = newType !== null ? newType.trim() : category;
+            await api.post('/api/receipts', { ...draft, supplier, amount: Number(amount) || 0, category: type, notes });
             qc.invalidateQueries({ queryKey: ['receipts'] });
             toast('Bill saved');
             onClose();
@@ -150,24 +156,90 @@ function ReceiptForm({ draft, categories, onClose }: { draft: { photo: string; c
           Total amount
           <MoneyInput value={amount} onChange={setAmount} />
         </label>
-        <label className="field">
-          Type (fabric, thread, ready stock…)
-          <input className="input" list="receipt-cats" value={category} onChange={(e) => setCategory(e.target.value)} />
-          <datalist id="receipt-cats">
-            {categories.map((c) => (
-              <option key={c} value={c} />
-            ))}
-          </datalist>
-        </label>
+        <TypePicker value={category} onChange={setCategory} newType={newType} onNewType={setNewType} />
         <label className="field">
           Notes
-          <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What was bought" />
+          <textarea className="input" rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Details, e.g. 12 m Banarasi silk, 2 colours" />
         </label>
         <button className="btn primary block" disabled={busy}>
           Save bill
         </button>
       </form>
     </Sheet>
+  );
+}
+
+interface BillTypes {
+  presets: string[];
+  custom: { id: number; name: string }[];
+}
+
+/**
+ * What the bill was for: the four usual types as one-tap buttons, any types the team added
+ * themselves, and "+ New type" to type a new one (saved for everyone with the bill).
+ */
+function TypePicker({ value, onChange, newType, onNewType }: { value: string; onChange: (v: string) => void; newType: string | null; onNewType: (v: string | null) => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const types = useQuery({ queryKey: ['receipts', 'types'], queryFn: () => api.get<BillTypes>('/api/receipts/types') });
+  const all = [...(types.data?.presets ?? []), ...(types.data?.custom.map((t) => t.name) ?? [])];
+  const selectedCustom = types.data?.custom.find((t) => t.name === value);
+  const pick = (name: string) => {
+    onNewType(null);
+    onChange(value === name ? '' : name); // tap again to clear
+  };
+  return (
+    <div className="field-group">
+      <span id="bill-type-label">What was bought</span>
+      <div className="chips" role="radiogroup" aria-labelledby="bill-type-label" style={{ flexWrap: 'wrap' }}>
+        {all.map((name) => (
+          <button type="button" key={name} role="radio" aria-checked={newType === null && value === name} className={`chip ${newType === null && value === name ? 'on' : ''}`} onClick={() => pick(name)}>
+            {name}
+          </button>
+        ))}
+        <button
+          type="button"
+          role="radio"
+          aria-checked={newType !== null}
+          className={`chip ${newType !== null ? 'on' : ''}`}
+          onClick={() => onNewType(newType === null ? '' : null)}
+        >
+          + New type
+        </button>
+      </div>
+      {newType !== null && (
+        <label className="field" style={{ marginTop: 8 }}>
+          New type name
+          <input
+            className="input"
+            autoFocus
+            value={newType}
+            onChange={(e) => onNewType(e.target.value)}
+            placeholder="e.g. Buttons & lace, Packaging, Embroidery"
+            maxLength={40}
+          />
+          <span className="tiny muted">It's added to the list for the whole team when you save this bill.</span>
+        </label>
+      )}
+      {newType === null && selectedCustom && (
+        <button
+          type="button"
+          className="btn ghost sm"
+          style={{ alignSelf: 'flex-start', marginTop: 4, color: 'var(--text-2)' }}
+          onClick={async () => {
+            if (!confirm(`Remove “${selectedCustom.name}” from the list? Bills already saved with it keep it.`)) return;
+            try {
+              qc.setQueryData(['receipts', 'types'], await api.del<BillTypes>(`/api/receipts/types/${selectedCustom.id}`));
+              onChange('');
+            } catch (e) {
+              toast((e as Error).message, true);
+            }
+          }}
+        >
+          Remove “{selectedCustom.name}” from the list
+        </button>
+      )}
+    </div>
   );
 }
 

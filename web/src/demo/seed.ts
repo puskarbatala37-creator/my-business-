@@ -154,10 +154,10 @@ export async function seedDemo(ctx: AppContext) {
       }
 
   const receipts: [number, string, number, string, string, string, string][] = [
-    [150, 'Asan Fabric House', 42000, 'fabric', 'Banarasi silk – 12 pieces', '#7a1f2b', '#e3c15b'],
-    [60, 'Indra Chowk Thread Store', 3800, 'thread', 'Zari thread + lining', '#3d5a80', '#e0fbfc'],
-    [20, 'Bhotahity Wholesale', 16500, 'ready stock', 'Kurta sets × 10', '#2d2d2d', '#8d8d8d'],
-    [2, 'New Road Tailors', 2500, 'stitching', 'Blouse stitching for 5 orders', '#8a5a44', '#f2d0a4'],
+    [150, 'Asan Fabric House', 42000, 'Fabric', 'Banarasi silk – 12 pieces', '#7a1f2b', '#e3c15b'],
+    [60, 'Indra Chowk Thread Store', 3800, 'Thread', 'Zari thread + lining', '#3d5a80', '#e0fbfc'],
+    [20, 'Bhotahity Wholesale', 16500, 'Ready-made', 'Kurta sets × 10', '#2d2d2d', '#8d8d8d'],
+    [2, 'New Road Tailors', 2500, 'Stitching', 'Blouse stitching for 5 orders', '#8a5a44', '#f2d0a4'],
   ];
   for (const [daysAgo, supplier, amount, category, notes, a, b] of receipts) {
     const at = new Date(Date.now() - daysAgo * 86_400_000).toISOString();

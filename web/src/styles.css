@@ -384,3 +384,4 @@ textarea.input { min-height: 80px; resize: vertical; }
 .switch.on::after { transform: translateX(20px); }
 .toggle-row:active .switch::after { width: 28px; }
 .toggle-row:active .switch.on::after { transform: translateX(16px); }
+.field-group { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--text-2); font-weight: 500; }

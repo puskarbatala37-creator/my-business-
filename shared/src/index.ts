@@ -37,6 +37,9 @@ export type OrderState = (typeof ORDER_STATES)[number];
 export const PLATFORMS = ['tiktok', 'facebook', 'instagram', 'whatsapp'] as const;
 export type Platform = (typeof PLATFORMS)[number];
 
+/** What a supplier bill was for. Teams can add their own types on top of these. */
+export const RECEIPT_TYPE_PRESETS = ['Fabric', 'Stitching', 'Ready-made', 'Thread'] as const;
+
 /** Labels for every platform value an order can hold, including ones no longer offered for new orders. */
 export const PLATFORM_LABELS: Record<string, string> = {
   tiktok: 'TikTok',
