@@ -1,0 +1,23 @@
+# Render Blueprint: Dashboard → New → Blueprint → pick this repository.
+# Creates the Slay web service with a permanent disk for the database and photos.
+services:
+  - type: web
+    name: slay
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    # A permanent disk needs a paid instance; on the free one every order would be lost on restart.
+    plan: starter
+    # Closest Render region to Nepal.
+    region: singapore
+    branch: claude/slay-order-inventory-app-gqde86
+    autoDeploy: true
+    healthCheckPath: /api/health
+    disk:
+      name: slay-data
+      mountPath: /data
+      sizeGB: 1
+    envVars:
+      # The https address comes from Render automatically (RENDER_EXTERNAL_URL).
+      # Set APP_URL only if you add your own domain later.
+      - key: ESEWA_MODE
+        value: test

@@ -48,7 +48,7 @@ export function SetupCheckPage() {
               detail={
                 s.https
                   ? `Slay runs at ${s.appUrl}. Phone notifications, fingerprint / face sign-in and installing to the home screen need this.`
-                  : `APP_URL is ${s.appUrl}. Deploy Slay to an https:// address and set APP_URL to it, or phone notifications, fingerprint sign-in and installing won't work.`
+                  : `APP_URL is ${s.appUrl}. Deploy Slay to an https:// address (on Render it's picked up automatically; elsewhere set APP_URL to it), or phone notifications, fingerprint sign-in and installing won't work.`
               }
             />
             <SmsTest s={s} />

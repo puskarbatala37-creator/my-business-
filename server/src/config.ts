@@ -84,12 +84,15 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
   const esewaMode = env('ESEWA_MODE', 'test') === 'production' ? 'production' : 'test';
   const e = ESEWA_ENDPOINTS[esewaMode];
   const port = Number(env('PORT', '3000'));
+  // The public https address. Render provides it automatically (RENDER_EXTERNAL_URL); APP_URL overrides it,
+  // e.g. for a custom domain.
+  const publicUrl = (env('APP_URL') || env('RENDER_EXTERNAL_URL')).replace(/\/$/, '');
   const cfg: Config = {
     port,
     dataDir,
     dbFile: env('DB_FILE', path.join(dataDir, 'slay.db')),
     uploadsDir: path.join(dataDir, 'uploads'),
-    appUrl: env('APP_URL', `http://localhost:${isProduction ? port : 5173}`).replace(/\/$/, ''),
+    appUrl: publicUrl || `http://localhost:${isProduction ? port : 5173}`,
     webDist: path.resolve(env('WEB_DIST', path.join(process.cwd(), '../web/dist'))),
     isProduction,
     trustProxy: env('TRUST_PROXY', isProduction ? '1' : '0') === '1',
@@ -121,7 +124,7 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     showCodesOnScreen: false,
     // Identifies the sender to the phone push services; Apple rejects placeholder addresses,
     // so default to the app's own https address.
-    vapidSubject: env('VAPID_SUBJECT', /^https:\/\//.test(env('APP_URL')) ? env('APP_URL').replace(/\/$/, '') : 'mailto:admin@example.com'),
+    vapidSubject: env('VAPID_SUBJECT', /^https:\/\//.test(publicUrl) ? publicUrl : 'mailto:admin@example.com'),
     webauthn: { rpName: 'Slay', rpID: '', origins: [] },
     ...overrides,
   };

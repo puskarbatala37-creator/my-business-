@@ -8,11 +8,47 @@ This takes about 30–45 minutes. You need a GitHub account (the code is already
 
 ---
 
-## Part 1 – Deploy on Railway (recommended)
+## Part 1a – Deploy on Render
+
+The repository has a `render.yaml` "Blueprint", so Render sets almost everything up by itself: the
+Docker build, a server in Singapore (closest to Nepal), the health check, and a **1 GB permanent disk at
+`/data`** where every order, photo and account lives. The `https://` address is picked up automatically.
+
+> **Paid instance needed.** A permanent disk only works on a paid instance (the Blueprint uses
+> *Starter*; check the current price on render.com/pricing). On Render's free instance the files are
+> wiped on every restart and deploy, so **all orders would be lost** – don't use it for Slay.
+
+1. **render.com → Sign in** (Google is fine). In *Account settings → Billing*, add a card.
+2. **Connect GitHub:** top right **+ New → Blueprint**. Under *Connect a repository* click
+   **GitHub → Connect** (or *Configure account*). On GitHub choose **Only select repositories →
+   `my-business-`** → **Install**. You return to Render.
+3. Next to **`puskarbatala37-creator/my-business-`** click **Connect**.
+4. **Blueprint name:** `slay`. **Branch:** `claude/slay-order-inventory-app-gqde86`
+   (the latest work is there). Render lists what it will create: a web service **slay** (Starter,
+   Singapore) with a disk **slay-data**. Click **Deploy Blueprint** / **Apply**.
+5. Wait for the first build (5–15 minutes). Open the **slay** service → **Logs**. When you see
+   `Slay is running…` followed by
+   `No accounts yet. Open the app and create the first owner account with setup code: 123456`,
+   note the code.
+6. At the top of the service page is the address, e.g. **`https://slay.onrender.com`**
+   (it may have a few extra letters). Open it on your phone, enter the setup code and create Teza's
+   owner account.
+7. **More → Setup check** → "Secure web address (https)" should say **Set up**.
+
+Every push to the branch redeploys automatically; the disk (data) is kept. With a disk, each deploy has
+about a minute of downtime. **Backups:** Render takes daily snapshots of the disk (service → *Disks*);
+also save Slay's own backup weekly (More → Backups, see [BACKUPS.md](BACKUPS.md)).
+SMS, email and the other settings below go in the service's **Environment** tab instead of Railway's
+*Variables* (Render redeploys after you save).
+
+---
+
+## Part 1b – Or deploy on Railway instead
 
 Railway builds Slay straight from GitHub using the project's `Dockerfile`, gives it an `https://`
-address automatically, and keeps the database on a persistent volume. (Render or Fly.io work too, as
-long as they give the app a **persistent disk** – without one, all orders are lost on every restart.)
+address automatically, and keeps the database on a persistent volume. (Use either Railway or Render, not
+both. Any host works as long as it gives the app a **persistent disk** – without one, all orders are lost
+on every restart.)
 
 1. **Choose the code to deploy.** Slay's latest work is on the branch
    `claude/slay-order-inventory-app-gqde86`. Either merge it into `main` on GitHub, or pick that branch
