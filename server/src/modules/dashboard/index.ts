@@ -14,11 +14,14 @@ export function dashboardSummary(ctx: AppContext, today = todayInBusinessTz()) {
     const r = db
       .prepare(
         `SELECT COUNT(*) AS orders, COALESCE(SUM(total), 0) AS sales, COALESCE(SUM(amount_paid), 0) AS collected,
+                COALESCE(SUM(delivery_charge), 0) AS delivery,
                 COALESCE(SUM((SELECT SUM(i.unit_cost * i.quantity) FROM order_items i WHERE i.order_id = o.id)), 0) AS cost
            FROM orders o WHERE state = 'active' AND order_date BETWEEN ? AND ?`,
       )
       .get(from, to) as any;
-    return { orders: r.orders, sales: money(r.sales), collected: money(r.collected), cost: money(r.cost), gross_profit: money(r.sales - r.cost) };
+    return { orders: r.orders, sales: money(r.sales), collected: money(r.collected), cost: money(r.cost), 
+      // Delivery charges are passed on to the courier, so they are not profit. (Discounts already lower the sales.)
+      gross_profit: money(r.sales - r.delivery - r.cost) };
   };
 
   const thisMonth = monthStart(today, 0);

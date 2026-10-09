@@ -124,6 +124,22 @@ describe('orders & stock', () => {
     void ctx;
   });
 
+  it('profit leaves out delivery charges and counts discounts', async () => {
+    const { teza, cat } = await ready();
+    // Sells for 3000 + 150 delivery − 200 discount = 2950; the sari cost 1800.
+    await teza.post('/api/orders', {
+      platform: 'tiktok',
+      customer,
+      delivery_charge: 150,
+      discount: 200,
+      items: [{ variant_id: cat.red, quantity: 1, unit_price: 3000 }],
+      payment: { status: 'paid', method: 'cash' },
+    });
+    const d = (await teza.get('/api/dashboard')).body;
+    expect(d.today.sales).toBe(2950);
+    expect(d.today.gross_profit).toBe(1000); // 3000 − 200 − 1800
+  });
+
   it('stores and searches supplier receipts', async () => {
     const { teza } = await ready();
     const r = await teza.post('/api/receipts', { photo: '/uploads/bill.jpg', supplier: 'Asan fabric store', amount: 12500, category: 'fabric' });

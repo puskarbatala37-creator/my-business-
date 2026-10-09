@@ -92,7 +92,7 @@ export function DashboardPage() {
                 <div className="stat">
                   <div className="label">Profit this month</div>
                   <div className="value">{npr(d.month.gross_profit)}</div>
-                  <div className="sub">sales − item cost</div>
+                  <div className="sub">sales − item cost, excl. delivery</div>
                 </div>
                 <Link to="/orders?payment=open" className="stat" style={{ color: 'inherit' }}>
                   <div className="label">Still to collect</div>
