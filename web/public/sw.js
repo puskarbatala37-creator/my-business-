@@ -115,8 +115,12 @@ async function photo(req) {
   return res;
 }
 
+/*
+ * Security notifications. The phone's push service (Google / Apple / Mozilla) delivers these
+ * straight to this worker, so they appear even when Slay is closed or the phone is locked.
+ */
 self.addEventListener('push', (event) => {
-  let data = { title: 'Slay', body: 'New alert', url: '/' };
+  let data = { title: 'Slay security alert', body: 'Something needs your attention – open Slay to see it.', url: '/more/security' };
   try {
     data = { ...data, ...event.data.json() };
   } catch {}
@@ -124,9 +128,34 @@ self.addEventListener('push', (event) => {
     self.registration.showNotification(data.title, {
       body: data.body,
       icon: '/icons/icon-192.png',
-      badge: '/icons/monochrome-512.png',
-      data: { url: data.url },
+      badge: '/icons/badge-96.png',
+      tag: data.tag || 'slay-security',
+      renotify: true,
+      // Urgent alerts stay on screen until dealt with.
+      requireInteraction: !!data.critical,
+      vibrate: data.critical ? [200, 100, 200, 100, 200] : [200, 100, 200],
+      timestamp: data.at || Date.now(),
+      data: { url: data.url || '/more/security' },
     }),
+  );
+});
+
+// The push service occasionally renews a phone's subscription: tell Slay's server the new one.
+self.addEventListener('pushsubscriptionchange', (event) => {
+  event.waitUntil(
+    (async () => {
+      const old = event.oldSubscription;
+      const sub =
+        event.newSubscription ||
+        (old && (await self.registration.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: old.options.applicationServerKey })));
+      if (!sub) return;
+      await fetch('/api/security/push/subscribe', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'x-slay': '1' },
+        body: JSON.stringify(sub.toJSON()),
+      });
+    })().catch(() => {}),
   );
 });
 

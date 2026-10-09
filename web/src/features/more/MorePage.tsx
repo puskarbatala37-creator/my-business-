@@ -12,6 +12,7 @@ const LINKS = [
   { to: '/receipts', icon: 'receipt', label: 'Supplier bills', sub: 'Photos of stock & material purchases' },
   { to: '/customers', icon: 'users', label: 'Customers', sub: 'Contacts and order history' },
   { to: '/more/team', icon: 'team', label: 'Team', sub: 'Add team members, reset passwords' },
+  { to: '/more/notifications', icon: 'bell', label: 'Notifications', sub: 'Security alerts on your phone and by email – on or off' },
   { to: '/more/security', icon: 'shield', label: 'Security', sub: 'Fingerprint / face sign-in, alerts, devices' },
 ];
 

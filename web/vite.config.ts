@@ -25,7 +25,7 @@ function precacheServiceWorker(): Plugin {
       const sw = path.join(outDir, 'sw.js');
       if (!fs.existsSync(sw)) return;
       const assets = fs.readdirSync(path.join(outDir, 'assets')).map((f) => `/assets/${f}`);
-      const files = ['/', '/manifest.webmanifest', '/favicon.ico', '/apple-touch-icon.png', '/icons/icon.svg', '/icons/icon-192.png', '/icons/monochrome-512.png', ...assets.sort()];
+      const files = ['/', '/manifest.webmanifest', '/favicon.ico', '/apple-touch-icon.png', '/icons/icon.svg', '/icons/icon-192.png', '/icons/badge-96.png', ...assets.sort()];
       const version = createHash('sha256').update(files.join('\n')).update(fs.readFileSync(path.join(outDir, 'index.html'))).digest('hex').slice(0, 12);
       const head = `self.__SLAY_VERSION__ = ${JSON.stringify(version)};\nself.__SLAY_PRECACHE__ = ${JSON.stringify(files)};\n`;
       fs.writeFileSync(sw, head + fs.readFileSync(sw, 'utf8'));

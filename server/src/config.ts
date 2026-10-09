@@ -119,7 +119,9 @@ export function loadConfig(overrides: Partial<Config> = {}): Config {
     },
     mail: { smtpUrl: env('SMTP_URL'), from: env('MAIL_FROM', 'Slay <no-reply@localhost>') },
     showCodesOnScreen: false,
-    vapidSubject: env('VAPID_SUBJECT', 'mailto:admin@example.com'),
+    // Identifies the sender to the phone push services; Apple rejects placeholder addresses,
+    // so default to the app's own https address.
+    vapidSubject: env('VAPID_SUBJECT', /^https:\/\//.test(env('APP_URL')) ? env('APP_URL').replace(/\/$/, '') : 'mailto:admin@example.com'),
     webauthn: { rpName: 'Slay', rpID: '', origins: [] },
     ...overrides,
   };

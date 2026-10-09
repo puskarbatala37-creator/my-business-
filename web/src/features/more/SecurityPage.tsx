@@ -4,8 +4,8 @@ import { Empty, Spinner, TopBar, useToast } from '../../components/ui';
 import { api } from '../../lib/api';
 import { dateTime } from '../../lib/format';
 import { biometricAvailable, biometricEnrolledHere, biometricName, enrollBiometric, forgetBiometricHere } from '../../lib/biometric';
-import { enablePush, pushEnabled } from '../../lib/push';
 import type { Alert } from '../../lib/types';
+import { NotificationSettings } from './NotificationsPage';
 
 interface SessionRow {
   id: number;
@@ -25,7 +25,6 @@ export function SecurityPage() {
   const toast = useToast();
   const alerts = useQuery({ queryKey: ['alerts'], queryFn: () => api.get<{ alerts: Alert[]; unread: number }>('/api/security/alerts') });
   const sessions = useQuery({ queryKey: ['sessions'], queryFn: () => api.get<{ sessions: SessionRow[] }>('/api/security/sessions') });
-  const [push, setPush] = useState<boolean | null>(null);
   const devices = useQuery({
     queryKey: ['trusted-devices'],
     queryFn: () => api.get<{ devices: { user_id: number; device_id: string; label: string; first_seen: string; last_seen_at: string | null; user_name: string; current: boolean }[] }>('/api/security/devices'),
@@ -39,9 +38,6 @@ export function SecurityPage() {
     biometricAvailable().then(setBioAvailable);
   }, []);
 
-  useEffect(() => {
-    pushEnabled().then(setPush);
-  }, []);
   // Opening this screen marks alerts as read (for this user only).
   useEffect(() => {
     if (alerts.data?.unread) api.post('/api/security/alerts/read').then(() => qc.invalidateQueries({ queryKey: ['alerts'] }));
@@ -108,28 +104,7 @@ export function SecurityPage() {
           )}
         </section>
 
-        <section className="card stack">
-          <h2>Phone notifications</h2>
-          <div className="small muted">Get a notification on this phone when someone tries to break in or something unusual happens – even when Slay is closed.</div>
-          {push ? (
-            <div className="badge good">On for this phone</div>
-          ) : (
-            <button
-              className="btn primary"
-              onClick={async () => {
-                try {
-                  await enablePush();
-                  setPush(true);
-                  toast('Notifications are on');
-                } catch (e) {
-                  toast((e as Error).message, true);
-                }
-              }}
-            >
-              Turn on notifications
-            </button>
-          )}
-        </section>
+        <NotificationSettings />
 
         <div className="section-title">
           <h2>Security notifications</h2>

@@ -8,6 +8,7 @@ import { useLiveSync } from '../lib/live';
 import type { Alert } from '../lib/types';
 import { BiometricOffer } from './BiometricOffer';
 import { Icon } from './Icon';
+import { NotificationOffer } from './NotificationOffer';
 import { useToast } from './ui';
 
 const LiveCtx = createContext(false);
@@ -34,6 +35,7 @@ export function Layout() {
           <Outlet />
         </div>
         <BiometricOffer />
+        <NotificationOffer />
         <nav className="bottom-nav no-print" aria-label="Main">
           <div className="bottom-nav-inner">
             <NavLink to="/" end>

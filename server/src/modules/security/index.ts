@@ -29,13 +29,31 @@ export const securityModule: AppModule = {
         z.object({ endpoint: z.string().url(), keys: z.object({ p256dh: z.string(), auth: z.string() }) }),
         req.body,
       );
-      alerts().saveSubscription(req.user!.id, body);
+      alerts().saveSubscription(req.user!.id, req.user!.sessionId, req.get('user-agent') ?? '', body);
       res.json({ ok: true });
     });
     r.post('/push/unsubscribe', (req, res) => {
       const body = parse(z.object({ endpoint: z.string() }), req.body);
-      alerts().removeSubscription(body.endpoint);
+      alerts().removeSubscription(req.user!.id, body.endpoint);
       res.json({ ok: true });
+    });
+    r.post('/push/test', async (req, res) => {
+      res.json({ sent: await alerts().sendTest(req.user!.id) });
+    });
+
+    // Each person's own choice of how security notifications reach them.
+    r.get('/notifications', (req, res) => res.json(alerts().preferences(req.user!.id)));
+    r.put('/notifications', (req, res) => {
+      const body = parse(z.object({ push: z.boolean().optional(), email: z.boolean().optional() }), req.body);
+      const before = alerts().preferences(req.user!.id);
+      alerts().setPreferences(req.user!.id, body);
+      // Recorded in the activity log, so switching alerts off is never invisible to the team.
+      for (const [key, label] of [['push', 'phone'], ['email', 'email']] as const) {
+        if (body[key] !== undefined && body[key] !== before[key]) {
+          alerts().raise('notifications_changed', 'info', `${req.user!.displayName} turned ${label} security notifications ${body[key] ? 'on' : 'off'}.`, {}, req.user!.id);
+        }
+      }
+      res.json(alerts().preferences(req.user!.id));
     });
 
     // Signed-in devices for the whole team – anyone can sign out a device they don't recognise.

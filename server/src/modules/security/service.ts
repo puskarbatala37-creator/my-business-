@@ -70,27 +70,68 @@ export class AlertService {
     return this.raise(kind, severity, message, { ...meta, key }, userId);
   }
 
-  private async deliver(alert: AlertRow) {
-    const subs = this.ctx.db.prepare('SELECT id, endpoint, keys FROM push_subscriptions').all() as {
-      id: number;
-      endpoint: string;
-      keys: string;
-    }[];
-    const payload = JSON.stringify({ title: 'Slay security alert', body: alert.message, url: '/more/security' });
+  /**
+   * Phones that should get a notification: signed in right now, belonging to an active team
+   * member who hasn't switched phone notifications off. (`userId` narrows it to one person.)
+   */
+  private subscriptions(userId?: number) {
+    return this.ctx.db
+      .prepare(
+        `SELECT p.id, p.endpoint, p.keys FROM push_subscriptions p
+           JOIN users u ON u.id = p.user_id
+           JOIN sessions s ON s.id = p.session_id AND s.user_id = p.user_id
+          WHERE u.active = 1 AND u.pending = 0 AND u.notify_push = 1 AND s.expires_at > ?
+            AND (? IS NULL OR p.user_id = ?)`,
+      )
+      .all(new Date().toISOString(), userId ?? null, userId ?? null) as { id: number; endpoint: string; keys: string }[];
+  }
+
+  /** Sends a Web Push notification. It reaches the phone even when Slay is closed. */
+  private async push(subs: { id: number; endpoint: string; keys: string }[], payload: Record<string, unknown>, urgent: boolean) {
+    let delivered = 0;
     await Promise.all(
       subs.map(async (s) => {
         try {
-          await webpush.sendNotification({ endpoint: s.endpoint, keys: JSON.parse(s.keys) }, payload, { TTL: 3600 });
+          // Kept for a day if the phone is off or has no signal; "high" wakes a sleeping phone.
+          await webpush.sendNotification({ endpoint: s.endpoint, keys: JSON.parse(s.keys) }, JSON.stringify(payload), {
+            TTL: 24 * 60 * 60,
+            urgency: urgent ? 'high' : 'normal',
+          });
+          delivered++;
         } catch (err: any) {
-          if (err?.statusCode === 404 || err?.statusCode === 410) {
-            this.ctx.db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(s.id);
-          }
+          // The phone uninstalled the app or turned notifications off in its settings.
+          if (err?.statusCode === 404 || err?.statusCode === 410) this.ctx.db.prepare('DELETE FROM push_subscriptions WHERE id = ?').run(s.id);
+          else console.error('push failed', err?.statusCode ?? err);
         }
       }),
     );
+    return delivered;
+  }
+
+  /** "Send a test notification" from the settings screen: only this person's signed-in phones. */
+  async sendTest(userId: number) {
+    return this.push(this.subscriptions(userId), { title: 'Slay notifications are working', body: 'You’ll get an alert like this if anything suspicious happens.', url: '/more/notifications', tag: 'slay-test' }, true);
+  }
+
+  private async deliver(alert: AlertRow) {
+    await this.push(
+      this.subscriptions(),
+      {
+        title: alert.severity === 'critical' ? 'Urgent: Slay security alert' : 'Slay security alert',
+        body: alert.message,
+        url: '/more/security',
+        tag: `slay-alert-${alert.id}`,
+        critical: alert.severity === 'critical',
+        at: Date.parse(alert.created_at) || Date.now(),
+      },
+      true,
+    );
     const mail = this.ctx.services.mail as MailService | undefined;
-    if (mail?.configured) {
-      const to = (this.ctx.db.prepare(`SELECT email FROM users WHERE active = 1 AND email IS NOT NULL`).all() as { email: string }[]).map((u) => u.email);
+    const emails = mail?.configured
+      ? (this.ctx.db.prepare(`SELECT email FROM users WHERE active = 1 AND pending = 0 AND notify_email = 1 AND email IS NOT NULL`).all() as { email: string }[])
+      : [];
+    const to = emails.map((u) => u.email);
+    if (mail && to.length) {
       const subject = alert.severity === 'critical' ? 'Slay: urgent security alert' : 'Slay: security notification';
       const text = `${alert.message}\n\nOpen Slay → More → Security to see details or sign a device out.\n${this.ctx.config.appUrl}`;
       try {
@@ -146,16 +187,34 @@ export class AlertService {
       .run(userId);
   }
 
-  saveSubscription(userId: number, sub: { endpoint: string; keys: { p256dh: string; auth: string } }) {
+  /** Links this phone to the person signed in on it (and to that sign-in, so signing out stops it). */
+  saveSubscription(userId: number, sessionId: number, userAgent: string, sub: { endpoint: string; keys: { p256dh: string; auth: string } }) {
     this.ctx.db
       .prepare(
-        `INSERT INTO push_subscriptions (user_id, endpoint, keys) VALUES (?, ?, ?)
-         ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, keys = excluded.keys`,
+        `INSERT INTO push_subscriptions (user_id, session_id, user_agent, endpoint, keys) VALUES (?, ?, ?, ?, ?)
+         ON CONFLICT(endpoint) DO UPDATE SET user_id = excluded.user_id, session_id = excluded.session_id,
+           user_agent = excluded.user_agent, keys = excluded.keys`,
       )
-      .run(userId, sub.endpoint, JSON.stringify(sub.keys));
+      .run(userId, sessionId, userAgent.slice(0, 300), sub.endpoint, JSON.stringify(sub.keys));
   }
 
-  removeSubscription(endpoint: string) {
-    this.ctx.db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ?').run(endpoint);
+  removeSubscription(userId: number, endpoint: string) {
+    this.ctx.db.prepare('DELETE FROM push_subscriptions WHERE endpoint = ? AND user_id = ?').run(endpoint, userId);
+  }
+
+  preferences(userId: number) {
+    const u = this.ctx.db.prepare('SELECT notify_push, notify_email FROM users WHERE id = ?').get(userId) as { notify_push: number; notify_email: number };
+    const mail = this.ctx.services.mail as MailService | undefined;
+    return {
+      push: !!u.notify_push,
+      email: !!u.notify_email,
+      emailAvailable: !!mail?.configured,
+      phones: this.subscriptions(userId).length,
+    };
+  }
+
+  setPreferences(userId: number, p: { push?: boolean; email?: boolean }) {
+    if (p.push !== undefined) this.ctx.db.prepare('UPDATE users SET notify_push = ? WHERE id = ?').run(p.push ? 1 : 0, userId);
+    if (p.email !== undefined) this.ctx.db.prepare('UPDATE users SET notify_email = ? WHERE id = ?').run(p.email ? 1 : 0, userId);
   }
 }

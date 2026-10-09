@@ -4,6 +4,7 @@ import orderSearch from './003_order_search.js';
 import emailLoginPhone from './004_email_login_phone.js';
 import defaultCategories from './005_default_categories.js';
 import signup from './006_signup.js';
+import notifications from './007_notifications.js';
 
 /**
  * Ordered list of schema migrations. To change the schema, append a new
@@ -16,4 +17,5 @@ export const migrations: { id: string; sql: string }[] = [
   { id: '004_email_login_phone', sql: emailLoginPhone },
   { id: '005_default_categories', sql: defaultCategories },
   { id: '006_signup', sql: signup },
+  { id: '007_notifications', sql: notifications },
 ];
