@@ -427,3 +427,6 @@ textarea.input { min-height: 80px; resize: vertical; }
 .listening-actions { display: flex; gap: 8px; align-items: center; margin-left: auto; }
 .listening-actions .seg button { min-height: 34px; font-size: 13px; padding: 0 10px; }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+
+/* A field the browser refused (see lib/formCheck.ts). */
+.input.field-invalid { border-color: var(--bad); box-shadow: 0 0 0 3px var(--bad-soft); }

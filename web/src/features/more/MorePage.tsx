@@ -163,7 +163,7 @@ function AccountSheet({ field, current, onClose }: { field: 'email' | 'phone'; c
         ) : (
           <label className="field">
             Mobile number
-            <input className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="98XXXXXXXX" value={value} onChange={(e) => setValue(e.target.value)} required />
+            <input className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="98XXXXXXXX or +61…" value={value} onChange={(e) => setValue(e.target.value)} required />
           </label>
         )}
         <div className="tiny muted">

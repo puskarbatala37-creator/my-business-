@@ -225,7 +225,8 @@ function SignupPage({ mode, onDone, onCancel }: { mode: 'approval' | 'open' | 'c
         </div>
         {field('displayName', 'Your name', { autoComplete: 'name' })}
         {field('email', 'Email – you sign in with this', { type: 'email', inputMode: 'email', autoCapitalize: 'none', autoComplete: 'email', spellCheck: false })}
-        {field('phone', 'Mobile number – for account recovery codes', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX' })}
+        {field('phone', 'Mobile number – for account recovery codes', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX or +61…' })}
+        <div className="tiny muted" style={{ marginTop: -6 }}>Nepal: 98XXXXXXXX · other countries: + and country code, e.g. +61412345678</div>
         {field('password', 'Password (at least 8 characters)', { type: 'password', minLength: 8, autoComplete: 'new-password' })}
         {error && (
           <div className="alert-banner" role="alert">
@@ -374,7 +375,8 @@ function SetupPage({ onDone }: { onDone: () => void }) {
         {field('code', 'Setup code (shown in the server log)', { inputMode: 'numeric', autoComplete: 'off' })}
         {field('displayName', 'Your name', { autoComplete: 'name' })}
         {field('email', 'Email – you sign in with this', { type: 'email', inputMode: 'email', autoCapitalize: 'none', autoComplete: 'email' })}
-        {field('phone', 'Mobile number – for account recovery codes', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX' })}
+        {field('phone', 'Mobile number – for account recovery codes', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX or +61…' })}
+        <div className="tiny muted" style={{ marginTop: -6 }}>Nepal: 98XXXXXXXX · other countries: + and country code, e.g. +61412345678</div>
         {field('password', 'Password (at least 8 characters)', { type: 'password', minLength: 8, autoComplete: 'new-password' })}
         {error && <div className="alert-banner">{error}</div>}
         <button className="btn primary block" disabled={busy}>

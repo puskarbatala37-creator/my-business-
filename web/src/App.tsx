@@ -1,9 +1,10 @@
+import { useFriendlyFormChecks } from './lib/formCheck';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { InstallPrompt } from './components/InstallPrompt';
 import { OfflineBar } from './components/OfflineBar';
 import { Layout } from './components/Layout';
-import { Spinner } from './components/ui';
+import { Spinner, useToast } from './components/ui';
 import { CompleteAccountPage } from './features/auth/CompleteAccountPage';
 import { LoginPage } from './features/auth/LoginPage';
 import { CustomerPage, CustomersPage } from './features/customers/CustomersPage';
@@ -32,6 +33,7 @@ import { hideSplash } from './lib/pwa';
  */
 export function App() {
   const { me, loading } = useAuth();
+  useFriendlyFormChecks(useToast());
   const loc = useLocation();
   const isPay = loc.pathname.startsWith('/pay/');
   // The launch screen stays up until the first real screen is ready – no blank flash.

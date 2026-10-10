@@ -118,7 +118,7 @@ export function CompleteAccountPage({ profile }: { profile: Profile }) {
             {profile.missing.includes('phone') && (
               <label className="field">
                 Your mobile number – if you ever can't get into your account, we text a recovery code here
-                <input className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="98XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} required />
+                <input className="input" type="tel" inputMode="tel" autoComplete="tel" placeholder="98XXXXXXXX or +61…" value={phone} onChange={(e) => setPhone(e.target.value)} required />
               </label>
             )}
             {error && <div className="alert-banner">{error}</div>}

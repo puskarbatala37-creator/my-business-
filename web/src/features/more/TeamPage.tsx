@@ -190,7 +190,7 @@ function AddMember({ onClose }: { onClose: () => void }) {
         </label>
         <label className="field">
           Mobile number (optional – otherwise they add it when they first sign in)
-          <input className="input" type="tel" inputMode="tel" autoComplete="off" placeholder="98XXXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} />
+          <input className="input" type="tel" inputMode="tel" autoComplete="off" placeholder="98XXXXXXXX or +61…" value={phone} onChange={(e) => setPhone(e.target.value)} />
         </label>
         <label className="field">
           Starting password (at least 8 characters – they can change it later)
