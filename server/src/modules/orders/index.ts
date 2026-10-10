@@ -139,6 +139,15 @@ export const ordersModule: AppModule = {
       res.status(201).json(orders().addPayment(idParam(req), b, req.user!));
     });
 
+    // Change the payment status after the order was taken (COD → paid, partial → paid, or fix a mistake).
+    r.post('/:id/payment-status', (req, res) => {
+      const b = parse(
+        z.object({ status: z.enum(PAYMENT_STATUSES), amount: zMoney.optional(), method: z.enum(PAYMENT_METHODS).nullable().optional() }),
+        req.body,
+      );
+      res.json(orders().setPaymentStatus(idParam(req), b, req.user!));
+    });
+
     r.delete('/:id/payments/:paymentId', (req, res) => {
       res.json(orders().deletePayment(idParam(req), idParam(req, 'paymentId'), req.user!));
     });

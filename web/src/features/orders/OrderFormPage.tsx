@@ -82,7 +82,7 @@ function fromOrder(o: OrderDetail): FormState {
     prep_time_days: o.prep_time_days ?? '',
     tracking_number: o.tracking_number,
     notes: o.notes,
-    payment: { status: o.payment_status, amount: '', method: o.payment_method ?? 'cash' },
+    payment: { status: o.payment_status, amount: o.payment_status === 'partial' ? o.amount_paid : '', method: o.payment_method ?? 'cash' },
     version: o.version,
   };
 }
@@ -99,6 +99,8 @@ export function OrderFormPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [loaded, setLoaded] = useState(!editing);
   const [picker, setPicker] = useState<{ lineKey?: string; only?: number[] } | null>(null);
+  /** Editing: the payment status is only changed when someone actually changes it here. */
+  const [paymentTouched, setPaymentTouched] = useState(false);
   const [saving, setSaving] = useState(false);
 
   // "New order for <customer>" from the customer screen.
@@ -178,7 +180,8 @@ export function OrderFormPage() {
     if (!form.items.length) return toast('Add at least one item', true);
     if (form.items.some((l) => !l.variant_id)) return toast('Choose the colour for every item', true);
     if (form.items.some((l) => l.unit_price === '')) return toast('Enter a price for every item', true);
-    if (!editing && form.payment.status === 'partial' && !(paidNow > 0 && paidNow < total)) return toast('Enter how much was paid (less than the total)', true);
+    if ((!editing || paymentTouched) && form.payment.status === 'partial' && !(paidNow > 0 && paidNow < total))
+      return toast(editing ? 'Enter how much has been paid in total (less than the order total)' : 'Enter how much was paid (less than the total)', true);
     setSaving(true);
     const body = {
       customer: { ...form.customer, phone: form.customer.phone || null },
@@ -194,9 +197,18 @@ export function OrderFormPage() {
       items: form.items.map((l) => ({ id: l.id ?? null, variant_id: l.variant_id, size: l.size, sizes: l.sizes, quantity: l.quantity, unit_price: Number(l.unit_price), photo: l.photo })),
     };
     try {
-      const saved = editing
+      let saved = editing
         ? await api.put<OrderDetail>(`/api/orders/${id}`, { ...body, version: form.version })
         : await api.post<OrderDetail>('/api/orders', { ...body, payment: { status: form.payment.status, amount: paidNow, method: form.payment.method } });
+      const paymentChanged =
+        form.payment.status !== saved.payment_status || (form.payment.status === 'partial' && Number(form.payment.amount) !== saved.amount_paid);
+      if (editing && paymentTouched && paymentChanged) {
+        saved = await api.post<OrderDetail>(`/api/orders/${id}/payment-status`, {
+          status: form.payment.status,
+          amount: form.payment.status === 'partial' ? Number(form.payment.amount) : undefined,
+          method: form.payment.method,
+        });
+      }
       qc.invalidateQueries({ queryKey: ['orders'] });
       qc.invalidateQueries({ queryKey: ['catalog'] });
       qc.setQueryData(['order', saved.id], saved);
@@ -470,17 +482,19 @@ export function OrderFormPage() {
         <section className="card stack">
           <div className="section-head">
             <h2>Payment</h2>
-            {!editing && <MicButton label="Payment status" kind="payment_status" onValue={(st) => setForm((f) => ({ ...f, payment: { ...f.payment, status: st } }))} />}
+            <MicButton label="Payment status" kind="payment_status" onValue={(st) => (setPaymentTouched(true), setForm((f) => ({ ...f, payment: { ...f.payment, status: st } })))} />
           </div>
-          {editing ? (
+          {editing && (
             <div className="small muted">
-              <PaymentBadge status={existing.data!.payment_status} balance={existing.data!.balance_due} /> · Record payments from the order screen.
+              Now: <PaymentBadge status={existing.data!.payment_status} balance={existing.data!.balance_due} /> · paid so far {npr(existing.data!.amount_paid)}. Change it
+              below when the customer pays (e.g. COD → Paid in full).
             </div>
-          ) : (
+          )}
+          {(
             <>
               <Seg
                 value={form.payment.status}
-                onChange={(s) => set('payment', { ...form.payment, status: s })}
+                onChange={(s) => (setPaymentTouched(true), set('payment', { ...form.payment, status: s }))}
                 options={[
                   { value: 'paid', label: 'Paid in full' },
                   { value: 'partial', label: 'Partial' },
@@ -489,18 +503,18 @@ export function OrderFormPage() {
               />
               {form.payment.status === 'partial' && (
                 <label className="field">
-                  <FieldHead text="Amount paid now">
-                    <MicButton label="Amount paid" kind="money" onValue={(n) => setForm((f) => ({ ...f, payment: { ...f.payment, amount: n } }))} />
+                  <FieldHead text={editing ? 'Total paid so far' : 'Amount paid now'}>
+                    <MicButton label="Amount paid" kind="money" onValue={(n) => (setPaymentTouched(true), setForm((f) => ({ ...f, payment: { ...f.payment, amount: n } })))} />
                   </FieldHead>
-                  <MoneyInput value={form.payment.amount} onChange={(n) => set('payment', { ...form.payment, amount: n })} />
+                  <MoneyInput value={form.payment.amount} onChange={(n) => (setPaymentTouched(true), set('payment', { ...form.payment, amount: n }))} />
                 </label>
               )}
               {form.payment.status !== 'unpaid' && (
                 <div className="row" style={{ gap: 8, alignItems: 'center' }}>
-                <MicButton label="Payment method" kind="payment_method" onValue={(m) => setForm((f) => ({ ...f, payment: { ...f.payment, method: m } }))} />
+                <MicButton label="Payment method" kind="payment_method" onValue={(m) => (setPaymentTouched(true), setForm((f) => ({ ...f, payment: { ...f.payment, method: m } })))} />
                 <div className="chips grow">
                   {PAYMENT_METHODS.map((m) => (
-                    <button type="button" key={m} className={`chip ${form.payment.method === m ? 'on' : ''}`} onClick={() => set('payment', { ...form.payment, method: m })}>
+                    <button type="button" key={m} className={`chip ${form.payment.method === m ? 'on' : ''}`} onClick={() => (setPaymentTouched(true), set('payment', { ...form.payment, method: m }))}>
                       {PAYMENT_METHOD_LABELS[m]}
                     </button>
                   ))}

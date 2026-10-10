@@ -152,7 +152,7 @@ export interface Payment {
   id: number;
   /** Negative for a refund. */
   amount: number;
-  kind: 'payment' | 'refund';
+  kind: 'payment' | 'refund' | 'correction';
   method: PaymentMethod;
   provider_ref: string | null;
   note: string;

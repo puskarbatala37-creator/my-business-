@@ -11,6 +11,7 @@ import { dateTime, longDate, npr, relativeDue, shortDate } from '../../lib/forma
 import { shareOrCopy } from '../../lib/share';
 import type { OrderDetail, OrderItem } from '../../lib/types';
 import { CancelSheet, RefundSheet, ReturnSheet } from './AfterSale';
+import { PaymentStatusSheet } from './PaymentStatusSheet';
 
 interface PayRequest {
   id: number;
@@ -28,7 +29,7 @@ export function OrderDetailPage() {
   const toast = useToast();
   const q = useQuery({ queryKey: ['order', orderId], queryFn: () => api.get<OrderDetail>(`/api/orders/${orderId}`) });
   const requests = useQuery({ queryKey: ['order', orderId, 'pay-requests'], queryFn: () => api.get<{ requests: PayRequest[] }>(`/api/payments/orders/${orderId}/requests`) });
-  const [sheet, setSheet] = useState<null | 'pay' | 'send' | 'cancel' | 'return' | 'refund'>(null);
+  const [sheet, setSheet] = useState<null | 'pay' | 'send' | 'cancel' | 'return' | 'refund' | 'status'>(null);
   const [manualCopy, setManualCopy] = useState<string | null>(null);
 
   const update = (o: OrderDetail) => {
@@ -158,6 +159,9 @@ export function OrderDetailPage() {
                   <Icon name="wallet" size={18} /> Payment
                 </button>
               )}
+              <button className="btn" onClick={() => setSheet('status')}>
+                <Icon name="edit" size={18} /> Payment status
+              </button>
             </div>
           )}
           {active && o.balance_due > 0 && (
@@ -299,9 +303,10 @@ export function OrderDetailPage() {
                 <div key={p.id} className="list-item">
                   <div className="grow">
                     <div className="strong">
-                      {p.amount < 0 ? `Refund −${npr(-p.amount)}` : npr(p.amount)} · {PAYMENT_METHOD_LABELS[p.method] ?? p.method}
+                      {p.kind === 'correction' ? `Correction −${npr(-p.amount)}` : p.amount < 0 ? `Refund −${npr(-p.amount)}` : npr(p.amount)}
+                      {p.kind !== 'correction' && ` · ${PAYMENT_METHOD_LABELS[p.method] ?? p.method}`}
                     </div>
-                    {p.note && p.amount < 0 && <div className="small muted">{p.note}</div>}
+                    {p.note && (p.amount < 0 || p.note.startsWith('Payment status')) && <div className="small muted">{p.note}</div>}
                     <div className="tiny muted">
                       {dateTime(p.created_at)} · {p.created_by_name ?? (p.provider_ref ? `verified by eSewa (${p.provider_ref})` : 'system')}
                     </div>
@@ -309,9 +314,9 @@ export function OrderDetailPage() {
                   {!p.provider_ref && (active || p.amount < 0) && (
                     <button
                       className="icon-btn"
-                      aria-label={p.amount < 0 ? 'Remove refund' : 'Remove payment'}
+                      aria-label={p.kind === 'correction' ? 'Remove correction' : p.amount < 0 ? 'Remove refund' : 'Remove payment'}
                       onClick={() =>
-                        confirm(p.amount < 0 ? `Remove the ${npr(-p.amount)} refund? Only do this if it was recorded by mistake.` : `Remove the ${npr(p.amount)} payment?`) &&
+                        confirm(p.kind === 'correction' ? `Remove this correction? The ${npr(-p.amount)} counts as paid again.` : p.amount < 0 ? `Remove the ${npr(-p.amount)} refund? Only do this if it was recorded by mistake.` : `Remove the ${npr(p.amount)} payment?`) &&
                         run.mutate(() => api.del(`/api/orders/${orderId}/payments/${p.id}`))
                       }
                     >
@@ -388,6 +393,20 @@ export function OrderDetailPage() {
             run.mutate(async () => {
               const res = await api.post<OrderDetail>(`/api/orders/${orderId}/returns`, b);
               toast(b.kind === 'exchange' ? 'Exchange saved' : 'Return saved');
+              return res;
+            })
+          }
+        />
+      )}
+      {sheet === 'status' && (
+        <PaymentStatusSheet
+          order={o}
+          saving={run.isPending}
+          onClose={() => setSheet(null)}
+          onSave={(b) =>
+            run.mutate(async () => {
+              const res = await api.post<OrderDetail>(`/api/orders/${orderId}/payment-status`, b);
+              toast('Payment status saved');
               return res;
             })
           }

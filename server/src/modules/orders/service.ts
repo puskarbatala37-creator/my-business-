@@ -199,7 +199,7 @@ export class OrderService {
       replacements: (items as any[]).filter((i) => i.return_id === r.id).map((i) => ({ id: i.id, product_name: i.product_name, color: i.color, size: i.size, quantity: i.quantity })),
       refunded: money(-((payments as any[]).filter((p) => p.return_id === r.id).reduce((n, p) => n + p.amount, 0))),
     }));
-    const refunded = money(-(payments as any[]).filter((p) => p.amount < 0).reduce((n, p) => n + p.amount, 0));
+    const refunded = money(-(payments as any[]).filter((p) => p.kind === 'refund').reduce((n, p) => n + p.amount, 0));
     const customer = this.customers.get(order.customer_id);
     const history = this.customers.history(order.customer_id, 20).filter((o: any) => o.id !== id);
     return { ...withBalance(order), refunded, customer, items, payments, returns, customer_history: history };
@@ -526,6 +526,63 @@ export class OrderService {
     return this.get(orderId);
   }
 
+  /**
+   * Sets an order's payment status after it was taken – e.g. COD → paid when the money arrives, or
+   * partial → paid. The payments list stays the record: money in is added as a payment; lowering
+   * what was paid (fixing a mistake) adds a correction row, so nothing silently disappears.
+   * `amount` (partial only) is the total paid so far.
+   */
+  setPaymentStatus(id: number, input: { status: PaymentStatus; amount?: number; method?: PaymentMethod | null }, user: AuthUser) {
+    const r = this.db.transaction(() => {
+      const o = this.db.prepare('SELECT * FROM orders WHERE id = ?').get(id) as any;
+      if (!o) throw notFound('Order not found');
+      if (o.state !== 'active') throw conflict(`This order is ${o.state}, so its payment status can’t be changed.`);
+      const total = money(o.total);
+      const paid = money(o.amount_paid);
+      let target: number;
+      if (input.status === 'paid') target = Math.max(total, paid);
+      else if (input.status === 'unpaid') target = 0;
+      else {
+        target = money(input.amount ?? -1);
+        if (!(target > 0 && target < total)) throw badRequest(`For partially paid, enter how much has been paid in total – more than 0 and less than ${total}.`);
+      }
+      const delta = money(target - paid);
+      if (delta > 0) {
+        const method = input.method ?? o.payment_method ?? 'cash';
+        this.insertPayment(id, delta, method, `Payment status set to ${STATUS_WORDS[input.status]}`, null, user.id);
+        this.db.prepare('UPDATE orders SET payment_method = COALESCE(payment_method, ?) WHERE id = ?').run(method, id);
+      } else if (delta < 0) {
+        // Verified online payments really happened – they can't be undone by changing the status.
+        const { verified } = this.db
+          .prepare(`SELECT COALESCE(SUM(amount), 0) AS verified FROM payments WHERE order_id = ? AND provider_ref IS NOT NULL AND kind = 'payment'`)
+          .get(id) as { verified: number };
+        if (target < money(verified)) {
+          throw conflict(`Rs ${money(verified)} was paid online and confirmed by eSewa, so this order can’t show less than that. If money was given back, record a refund instead.`);
+        }
+        this.db
+          .prepare(`INSERT INTO payments (order_id, amount, method, note, kind, created_by) VALUES (?, ?, ?, ?, 'correction', ?)`)
+          .run(id, delta, o.payment_method ?? 'cash', `Correction: payment status changed to ${STATUS_WORDS[input.status]}`, user.id);
+      }
+      this.db.prepare('UPDATE orders SET version = version + 1, updated_at = ? WHERE id = ?').run(new Date().toISOString(), id);
+      const after = this.recalculate(id);
+      return { invoiceNo: o.invoice_no as string, from: o.payment_status as PaymentStatus, to: after.status, delta };
+    })();
+    logActivity(this.ctx, user.id, 'payment_status_changed', 'order', id, { from: r.from, to: r.to, change: r.delta });
+    if (r.delta < 0) {
+      // Lowering what an order shows as paid is how money could go missing – the team is told.
+      this.alerts.raise(
+        'payment_reduced',
+        'warning',
+        `${user.displayName} changed ${r.invoiceNo} from “${STATUS_WORDS[r.from]}” to “${STATUS_WORDS[r.to]}”, removing Rs ${-r.delta} from what was paid.`,
+        { invoice_no: r.invoiceNo },
+        user.id,
+      );
+    }
+    this.ctx.bus.publish(LIVE_EVENTS.payment, { actor: actorOf(user), ids: [id] });
+    this.ctx.bus.publish(LIVE_EVENTS.order, { actor: actorOf(user), ids: [id] });
+    return this.get(id);
+  }
+
   deletePayment(orderId: number, paymentId: number, user: AuthUser) {
     const p = this.db.prepare('SELECT * FROM payments WHERE id = ? AND order_id = ?').get(paymentId, orderId) as any;
     if (!p) throw notFound('Payment not found');
@@ -580,6 +637,8 @@ export class OrderService {
  * `balance_due`: what the customer still owes. `refund_due`: what the business owes back – more
  * paid than the order is now worth (after a return or exchange), or anything paid on a cancelled order.
  */
+const STATUS_WORDS: Record<PaymentStatus, string> = { paid: 'Paid in full', partial: 'Partially paid', unpaid: 'COD / unpaid' };
+
 function withBalance<T extends { total: number; amount_paid: number; state?: string }>(o: T) {
   const worth = o.state === 'cancelled' ? 0 : o.total;
   return {
