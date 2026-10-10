@@ -192,6 +192,10 @@ export function Thumb({ src, size = 'md' }: { src?: string | null; size?: 'md' |
 }
 
 /** Tap to take a photo with the camera (or choose from the gallery). Uploads immediately. */
+/**
+ * A photo for a product colour or an order item. Tapping it offers a new photo from the camera or one
+ * already on the phone (gallery / photo library) – so existing product photos can be reused.
+ */
 export function PhotoInput({
   value,
   onChange,
@@ -208,36 +212,83 @@ export function PhotoInput({
   onCaptured?: (at: Date) => void;
 }) {
   const [busy, setBusy] = useState(false);
+  const [choosing, setChoosing] = useState(false);
   const toast = useToast();
+  const use = async (file: File | undefined) => {
+    setChoosing(false);
+    if (!file) return;
+    // When the photo was taken: now for the camera, the file's date for a gallery photo.
+    onCaptured?.(new Date(Math.min(Date.now(), file.lastModified || Date.now())));
+    setBusy(true);
+    try {
+      onChange(await uploadPhoto(file));
+    } catch (err) {
+      toast((err as Error).message, true);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const picker = (camera: boolean) => (
+    <input
+      type="file"
+      accept="image/*"
+      {...(camera ? { capture: 'environment' as const } : {})}
+      className="file-picker"
+      onChange={(e) => {
+        const file = e.target.files?.[0];
+        e.target.value = '';
+        void use(file);
+      }}
+    />
+  );
   return (
-    <div className="photo-input" style={{ height, width }}>
-      {busy ? <div className="spinner" style={{ margin: 0 }} /> : value ? <img src={value} alt="" /> : (
-        <div className="center small">
-          <Icon name="camera" />
-          <div>{label}</div>
-        </div>
+    <>
+      <button
+        type="button"
+        className="photo-input"
+        style={{ height, width }}
+        aria-label={value ? `${label}: change photo` : label}
+        disabled={busy}
+        onClick={() => setChoosing(true)}
+      >
+        {busy ? (
+          <div className="spinner" style={{ margin: 0 }} />
+        ) : value ? (
+          <img src={value} alt="" />
+        ) : (
+          <div className="center small">
+            <Icon name="camera" />
+            <div>{label}</div>
+          </div>
+        )}
+      </button>
+      {choosing && (
+        <Sheet title={value ? 'Change photo' : 'Add a photo'} onClose={() => setChoosing(false)}>
+          <div className="stack">
+            <label className="btn primary block" style={{ minHeight: 52 }}>
+              <Icon name="camera" /> Take a photo
+              {picker(true)}
+            </label>
+            <label className="btn block" style={{ minHeight: 52 }}>
+              <Icon name="image" /> Choose from gallery
+              {picker(false)}
+            </label>
+            {value && (
+              <button
+                type="button"
+                className="btn ghost block"
+                onClick={() => {
+                  onChange(null);
+                  setChoosing(false);
+                }}
+              >
+                <Icon name="trash" size={18} /> Remove photo
+              </button>
+            )}
+          </div>
+        </Sheet>
       )}
-      <input
-        type="file"
-        accept="image/*"
-        capture="environment"
-        aria-label={label}
-        onChange={async (e) => {
-          const file = e.target.files?.[0];
-          e.target.value = '';
-          if (!file) return;
-          onCaptured?.(new Date());
-          setBusy(true);
-          try {
-            onChange(await uploadPhoto(file));
-          } catch (err) {
-            toast((err as Error).message, true);
-          } finally {
-            setBusy(false);
-          }
-        }}
-      />
-    </div>
+    </>
   );
 }
 

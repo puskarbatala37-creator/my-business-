@@ -41,35 +41,37 @@ export function ReceiptsPage() {
     queryFn: () => api.get<{ receipts: Receipt[]; total: number; count: number }>(`/api/receipts${qs({ q, from: rangeFrom(range) })}`),
   });
 
+  async function pickBill(input: HTMLInputElement) {
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    // Timestamp = the moment the photo was taken (camera) or the photo's own date (gallery).
+    const capturedAt = new Date(Math.min(Date.now(), file.lastModified || Date.now())).toISOString();
+    setUploading(true);
+    try {
+      setDraft({ photo: await uploadPhoto(file), captured_at: capturedAt });
+    } catch (err) {
+      toast((err as Error).message, true);
+    } finally {
+      setUploading(false);
+    }
+  }
+
   return (
     <>
       <TopBar title="Supplier bills" actions={<HeaderActions />} />
       <main className="page stack" style={{ paddingTop: 12 }}>
-        <label className="btn primary block" style={{ minHeight: 56, position: 'relative', overflow: 'hidden' }}>
-          <Icon name="camera" /> {uploading ? 'Uploading…' : 'Snap a supplier bill'}
-          <input
-            type="file"
-            accept="image/*"
-            capture="environment"
-            style={{ position: 'absolute', inset: 0, opacity: 0 }}
-            disabled={uploading}
-            onChange={async (e) => {
-              const file = e.target.files?.[0];
-              e.target.value = '';
-              if (!file) return;
-              // Timestamp = the moment the photo was taken (camera) or chosen.
-              const capturedAt = new Date(Math.min(Date.now(), file.lastModified || Date.now())).toISOString();
-              setUploading(true);
-              try {
-                setDraft({ photo: await uploadPhoto(file), captured_at: capturedAt });
-              } catch (err) {
-                toast((err as Error).message, true);
-              } finally {
-                setUploading(false);
-              }
-            }}
-          />
-        </label>
+        {/* A new photo of the bill, or one already on the phone (e.g. a bill the supplier sent on WhatsApp). */}
+        <div className="row" style={{ gap: 8 }}>
+          <label className="btn primary grow" style={{ minHeight: 56 }}>
+            <Icon name="camera" /> {uploading ? 'Uploading…' : 'Snap a supplier bill'}
+            <input type="file" accept="image/*" capture="environment" className="file-picker" disabled={uploading} onChange={(e) => pickBill(e.target)} />
+          </label>
+          <label className="btn" style={{ minHeight: 56 }}>
+            <Icon name="image" /> Choose a photo
+            <input type="file" accept="image/*" className="file-picker" disabled={uploading} onChange={(e) => pickBill(e.target)} />
+          </label>
+        </div>
 
         <div className="search">
           <Icon name="search" size={20} />
