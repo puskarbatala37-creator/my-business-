@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { canPromptInstall, inAppBrowser, iosOtherBrowser, isAndroid, isIOS, isStandalone, onInstallChange, promptInstall } from '../lib/pwa';
+import { canPromptInstall, inAppBrowser, installedBefore, iosOtherBrowser, isAndroid, isIOS, isStandalone, onInstallChange, promptInstall } from '../lib/pwa';
 import { Icon } from './Icon';
 import { Sheet, useToast } from './ui';
 
@@ -30,11 +30,16 @@ function recentlyDismissed() {
  */
 export function InstallPrompt() {
   const [open, setOpen] = useState(false);
+  /** Why the manual steps are shown instead of the one-tap button (after it didn't work). */
+  const [note, setNote] = useState<string | null>(null);
   const oneTap = useSyncExternalStore(onInstallChange, canPromptInstall);
   const toast = useToast();
 
   useEffect(() => {
-    const show = () => setOpen(true);
+    const show = () => {
+      setNote(null);
+      setOpen(true);
+    };
     window.addEventListener(OPEN_INSTALL, show);
     let t: ReturnType<typeof setTimeout> | undefined;
     // Never pop up over someone typing (e.g. halfway through signing in) or over another panel:
@@ -81,6 +86,20 @@ export function InstallPrompt() {
           <li>Security alerts and fingerprint / face sign-in</li>
         </ul>
 
+        {installedBefore() && (
+          <div className="alert-banner info" role="status">
+            <span>
+              Slay looks already installed on this phone. Look for the <strong>Slay</strong> icon on your home screen or in your app list and open it
+              from there. If it isn’t there, install it with the steps below.
+            </span>
+          </div>
+        )}
+        {note && (
+          <div className="alert-banner warning" role="status">
+            <span>{note}</span>
+          </div>
+        )}
+
         {inAppBrowser ? (
           <>
             <ol className="install-steps">
@@ -108,9 +127,14 @@ export function InstallPrompt() {
           <button
             className="btn primary block"
             onClick={async () => {
-              if (await promptInstall()) {
-                toast('Slay is on your home screen');
+              const outcome = await promptInstall();
+              if (outcome === 'accepted') {
+                toast('Slay is being added to your home screen');
                 setOpen(false);
+              } else if (outcome === 'dismissed') {
+                setNote('Not installed. You can install Slay any time with the steps below.');
+              } else {
+                setNote('Your browser didn’t open its install window. Install Slay with these steps instead:');
               }
             }}
           >

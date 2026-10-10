@@ -31,14 +31,31 @@ export function onInstallChange(fn: () => void) {
   listeners.add(fn);
   return () => void listeners.delete(fn);
 }
-export async function promptInstall(): Promise<boolean> {
-  if (!deferred) return false;
+/**
+ * Opens the browser's own install window. `unavailable`: the browser refused to show it (it only
+ * allows one per page load, and can decide not to offer it) – the manual steps are the way then.
+ */
+export async function promptInstall(): Promise<'accepted' | 'dismissed' | 'unavailable'> {
   const e = deferred;
-  deferred = null;
-  await e.prompt();
-  const { outcome } = await e.userChoice;
+  deferred = null; // the browser allows each install offer to be used once
   emit();
-  return outcome === 'accepted';
+  if (!e) return 'unavailable';
+  try {
+    await e.prompt();
+    const { outcome } = await e.userChoice;
+    return outcome === 'accepted' ? 'accepted' : 'dismissed';
+  } catch {
+    return 'unavailable';
+  }
+}
+
+/** Installed from this browser before (the browser told us), though this tab isn't the installed app. */
+export function installedBefore() {
+  try {
+    return localStorage.getItem('slay.installed') === '1';
+  } catch {
+    return false;
+  }
 }
 
 /** Fades out the launch screen once the first real screen is ready. */

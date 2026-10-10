@@ -29,7 +29,8 @@ export const requireOwner: RequestHandler = (req, _res, next) => {
 
 const zPassword = z.string().min(8, 'password needs at least 8 characters').max(200);
 const zEmail = z.string().trim().min(3, 'enter your email address').max(254);
-const zPhone = z.string().trim().min(1, 'enter a mobile number').max(25);
+/** Optional everywhere: email is the main way to reach someone. Empty = no phone. */
+const zPhone = z.string().trim().max(25);
 const zCode = z.string().trim().regex(/^\d{6}$/, 'enter the 6-digit code');
 
 export const authModule: AppModule = {
@@ -64,13 +65,13 @@ export const authModule: AppModule = {
     r.get('/setup', (_req, res) => res.json({ needsSetup: auth().userCount() === 0 }));
     r.post('/setup', (req, res) => {
       const b = parse(
-        z.object({ code: z.string(), email: zEmail, displayName: z.string().trim().min(1).max(80), phone: zPhone, password: zPassword }),
+        z.object({ code: z.string(), email: zEmail, displayName: z.string().trim().min(1).max(80), phone: zPhone.optional(), password: zPassword }),
         req.body,
       );
       if (auth().userCount() > 0) throw new HttpError(409, 'Setup is already done – please sign in.');
       const code = auth().setupCode;
       if (!code || b.code.trim() !== code) throw new HttpError(403, 'Wrong setup code. It is printed in the server log.');
-      const { id } = auth().createUser({ email: b.email, displayName: b.displayName, password: b.password, phone: b.phone, role: 'owner' });
+      const { id } = auth().createUser({ email: b.email, displayName: b.displayName, password: b.password, phone: b.phone || null, role: 'owner' });
       signIn(res, auth().startSession(auth().getUser(id), client(req, res), 'password'));
     });
 
@@ -86,7 +87,7 @@ export const authModule: AppModule = {
     // ── Create your own account from the sign-in screen (owners decide who may) ──
     r.get('/signup', (_req, res) => res.json({ mode: auth().userCount() === 0 ? 'closed' : auth().signupMode }));
     r.post('/signup', (req, res) => {
-      const b = parse(z.object({ email: zEmail, displayName: z.string().trim().min(1, 'enter your name').max(80), phone: zPhone, password: zPassword }), req.body);
+      const b = parse(z.object({ email: zEmail, displayName: z.string().trim().min(1, 'enter your name').max(80), phone: zPhone.optional(), password: zPassword }), req.body);
       const c = client(req, res);
       const result = auth().signup(b, c);
       if (result.pending) {
@@ -171,7 +172,7 @@ export const authModule: AppModule = {
     });
     r.post('/team', requireAuth, requireOwner, (req, res) => {
       const b = parse(
-        z.object({ email: zEmail, displayName: z.string().trim().min(1).max(80), password: zPassword, phone: zPhone.optional().or(z.literal('')), role: z.enum(ROLES).default('member') }),
+        z.object({ email: zEmail, displayName: z.string().trim().min(1).max(80), password: zPassword, phone: zPhone.optional(), role: z.enum(ROLES).default('member') }),
         req.body,
       );
       res.status(201).json({ id: auth().addMember(req.user!, { ...b, phone: b.phone || null }) });

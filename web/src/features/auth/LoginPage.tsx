@@ -19,7 +19,7 @@ const markPasswordLogin = () => {
 /**
  * Sign-in. On a phone with a fingerprint / face sensor that has been set up,
  * biometric sign-in is the main button; email + password is the fallback,
- * and "Forgot password?" sends a recovery code to the account's phone.
+ * and "Forgot password?" emails a recovery code (or texts it when the server has no email set up).
  */
 export function LoginPage() {
   const qc = useQueryClient();
@@ -225,8 +225,10 @@ function SignupPage({ mode, onDone, onCancel }: { mode: 'approval' | 'open' | 'c
         </div>
         {field('displayName', 'Your name', { autoComplete: 'name' })}
         {field('email', 'Email – you sign in with this', { type: 'email', inputMode: 'email', autoCapitalize: 'none', autoComplete: 'email', spellCheck: false })}
-        {field('phone', 'Mobile number – for account recovery codes', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX or +61…' })}
-        <div className="tiny muted" style={{ marginTop: -6 }}>Nepal: 98XXXXXXXX · other countries: + and country code, e.g. +61412345678</div>
+        {field('phone', 'Mobile number (optional)', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX or +61…', required: false })}
+        <div className="tiny muted" style={{ marginTop: -6 }}>
+          You can leave this empty – codes to reset your password come to your email. Nepal: 98XXXXXXXX · other countries: + and country code, e.g. +61412345678
+        </div>
         {field('password', 'Password (at least 8 characters)', { type: 'password', minLength: 8, autoComplete: 'new-password' })}
         {error && (
           <div className="alert-banner" role="alert">
@@ -244,7 +246,7 @@ function SignupPage({ mode, onDone, onCancel }: { mode: 'approval' | 'open' | 'c
   );
 }
 
-/** "Forgot password?": a 6-digit code goes by SMS to the phone number on the account. */
+/** "Forgot password?": a 6-digit code goes to the account's email (or by SMS if the server has no email set up). */
 function RecoverPage({ initialEmail, onDone, onCancel }: { initialEmail: string; onDone: () => void; onCancel: () => void }) {
   const [step, setStep] = useState<'email' | 'code'>('email');
   const [email, setEmail] = useState(initialEmail);
@@ -282,14 +284,14 @@ function RecoverPage({ initialEmail, onDone, onCancel }: { initialEmail: string;
               void send();
             }}
           >
-            <div className="small muted">We'll text a 6-digit code to the mobile number on your account.</div>
+            <div className="small muted">We'll send a 6-digit code to the email address of your account.</div>
             <label className="field">
               Your sign-in email
               <input className="input" type="email" inputMode="email" autoComplete="username" autoCapitalize="none" value={email} onChange={(e) => setEmail(e.target.value)} required />
             </label>
             {error && <div className="alert-banner">{error}</div>}
             <button className="btn primary block" disabled={busy}>
-              {busy ? 'Sending…' : 'Text me a code'}
+              {busy ? 'Sending…' : 'Send me a code'}
             </button>
           </form>
         ) : (
@@ -332,7 +334,7 @@ function RecoverPage({ initialEmail, onDone, onCancel }: { initialEmail: string;
         <button type="button" className="btn ghost block" onClick={onCancel}>
           Back to sign in
         </button>
-        <div className="tiny muted center">No phone on your account, or lost it? Ask an owner to reset your password under More → Team.</div>
+        <div className="tiny muted center">No code arriving, or can't get into that email? Ask an owner to reset your password under More → Team.</div>
       </div>
     </div>
   );
@@ -375,8 +377,10 @@ function SetupPage({ onDone }: { onDone: () => void }) {
         {field('code', 'Setup code (shown in the server log)', { inputMode: 'numeric', autoComplete: 'off' })}
         {field('displayName', 'Your name', { autoComplete: 'name' })}
         {field('email', 'Email – you sign in with this', { type: 'email', inputMode: 'email', autoCapitalize: 'none', autoComplete: 'email' })}
-        {field('phone', 'Mobile number – for account recovery codes', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX or +61…' })}
-        <div className="tiny muted" style={{ marginTop: -6 }}>Nepal: 98XXXXXXXX · other countries: + and country code, e.g. +61412345678</div>
+        {field('phone', 'Mobile number (optional)', { type: 'tel', inputMode: 'tel', autoComplete: 'tel', placeholder: '98XXXXXXXX or +61…', required: false })}
+        <div className="tiny muted" style={{ marginTop: -6 }}>
+          You can leave this empty – codes to reset your password come to your email. Nepal: 98XXXXXXXX · other countries: + and country code, e.g. +61412345678
+        </div>
         {field('password', 'Password (at least 8 characters)', { type: 'password', minLength: 8, autoComplete: 'new-password' })}
         {error && <div className="alert-banner">{error}</div>}
         <button className="btn primary block" disabled={busy}>

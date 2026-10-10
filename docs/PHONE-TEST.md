@@ -9,7 +9,7 @@ screenshot (and copy any message from *More → Setup check*) and send it over.
 | 1 | **Install to home screen** | Open the address in Chrome / Safari. Follow the "Get the Slay app" sheet (Android: *Install*; iPhone: Share → *Add to Home Screen*). Open Slay from the new icon. | Slay icon on the home screen; opens full screen with the rose launch screen, no browser bar. *Setup check → Installed on this phone* says **Yes**. | ☐ | ☐ |
 | 2 | **Sign up / sign in with password** | Teza: setup code from the Railway log. Friend: *New here? Create an account*, Teza approves under *More → Team*. | Both land on the dashboard. | ☐ | ☐ |
 | 3 | **Phone confirmation by SMS** (after Sparrow is set up) | New account signs in. | Asked to confirm the phone; a real text arrives; entering the code completes setup. | ☐ | ☐ |
-| 4 | **Forgot password** (after Sparrow) | Sign out → *Forgot password?* → email. | Code arrives by text; new password works. | ☐ | ☐ |
+| 4 | **Forgot password** (after email is set up, DEPLOY.md Part 3) | Sign out → *Forgot password?* → email. | Code arrives by email; new password works. | ☐ | ☐ |
 | 5 | **Test SMS** | *More → Setup check → Send test SMS*. | Green result **and** the text arrives. | ☐ | – |
 | 6 | **Fingerprint / face sign-in** | Sign in with password → accept *Faster sign-in* (or *More → Security → Turn on*). Sign out. Tap *Sign in with fingerprint / face unlock*. | The phone's real fingerprint / Face ID prompt appears; you're signed in without typing. | ☐ | ☐ |
 | 7 | **Notifications: turn on** | Accept the *Security alerts* offer (or *More → Notifications → Turn on for this phone*) and tap **Allow**. | *Setup check → Phone notifications* says **On for this phone**. iPhone: only works from the installed app (test 1). | ☐ | ☐ |

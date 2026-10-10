@@ -3,6 +3,7 @@ import type { AppContext, AuthUser } from '../../core/context.js';
 import { logActivity, service } from '../../core/context.js';
 import { HttpError } from '../../core/http.js';
 import { getSetting, setSetting } from '../../db/index.js';
+import type { MailService } from '../messaging/mail.js';
 import { maskPhone, type SmsService } from '../messaging/sms.js';
 import type { AlertService } from '../security/service.js';
 import type { AuthService, ClientInfo, UserRow } from './service.js';
@@ -14,9 +15,15 @@ const MAX_TRIES = 5;
 const RESEND_SECONDS = 60;
 const MAX_SENDS_PER_HOUR = 5;
 
+/** "te•••@gmail.com" – enough to recognise your own address, not enough to reveal it. */
+export const maskEmail = (e: string) => {
+  const [name, domain] = e.split('@');
+  return `${name.slice(0, 2)}${'•'.repeat(Math.max(1, name.length - 2))}@${domain}`;
+};
+
 /**
- * One-time 6-digit codes sent by SMS: account recovery ("Forgot password?")
- * and confirming a phone number. Codes are stored only as a keyed hash, expire
+ * One-time 6-digit codes: account recovery ("Forgot password?") – sent to the account's email,
+ * or by SMS when no email service is set up – and confirming a phone number (SMS). Codes are stored only as a keyed hash, expire
  * after 10 minutes, allow 5 tries and are rate-limited.
  */
 export class RecoveryService {
@@ -40,12 +47,30 @@ export class RecoveryService {
   private get alerts() {
     return service<AlertService>(this.ctx, 'alerts');
   }
+  private get mail() {
+    return service<MailService>(this.ctx, 'mail');
+  }
+
+  /**
+   * Where a recovery code for this person goes: their email when an email service is set up
+   * (the main way), otherwise their phone by SMS. Null when neither can reach them.
+   */
+  private recoveryChannel(u: UserRow): { via: 'email'; to: string } | { via: 'sms'; to: string } | null {
+    if (u.email && (this.mail.configured || this.ctx.config.showCodesOnScreen)) return { via: 'email', to: u.email };
+    if (u.phone && this.auth.smsReady) return { via: 'sms', to: u.phone };
+    return null;
+  }
+
+  /** Whether "Forgot password?" can send codes at all on this server. */
+  get recoveryReady() {
+    return this.mail.configured || this.auth.smsReady;
+  }
 
   private hash(userId: number, purpose: Purpose, code: string) {
     return crypto.createHmac('sha256', this.secret).update(`${userId}:${purpose}:${code}`).digest('hex');
   }
 
-  private async issue(u: UserRow, purpose: Purpose, text: (code: string) => string) {
+  private async issue(u: UserRow, purpose: Purpose, text: (code: string) => string, channel: { via: 'email' | 'sms'; to: string } = { via: 'sms', to: u.phone! }) {
     const { db } = this.ctx;
     const now = Date.now();
     const recent = db
@@ -63,12 +88,18 @@ export class RecoveryService {
         u.id,
         purpose,
         this.hash(u.id, purpose, code),
-        u.phone!,
+        channel.to, // where the code went (a phone number or an email address)
         new Date(now + CODE_MINUTES * 60_000).toISOString(),
       );
     })();
-    await this.sms.send(u.phone!, text(code));
-    return { to: maskPhone(u.phone!), ...(this.ctx.config.showCodesOnScreen ? { demo_code: code } : {}) };
+    if (channel.via === 'email') {
+      if (this.mail.configured) await this.mail.send([channel.to], 'Your Slay code', text(code));
+    } else await this.sms.send(channel.to, text(code));
+    return {
+      to: channel.via === 'email' ? maskEmail(channel.to) : maskPhone(channel.to),
+      via: channel.via,
+      ...(this.ctx.config.showCodesOnScreen ? { demo_code: code } : {}),
+    };
   }
 
   /** Checks a code; each wrong guess counts, and a code dies after 5 tries. */
@@ -109,28 +140,44 @@ export class RecoveryService {
   // ── "Forgot password?" (signed out) ──
 
   /**
-   * Sends a recovery code to the account's phone. The reply never says whether the
-   * email exists, so the form can't be used to find out who has an account.
+   * Sends a recovery code to the account's email (or phone, if no email service is set up). The
+   * reply never says whether the email exists, so the form can't be used to find out who has an account.
    */
   async start(email: string, client: ClientInfo) {
     this.auth.checkIpLimit(client.ip);
+    if (!this.recoveryReady) {
+      throw new HttpError(503, 'Password reset codes aren’t set up on this server yet. Ask an owner to reset your password under More → Team.', 'recovery_off');
+    }
     const u = this.auth.findByLogin(email);
-    const generic = { ok: true, message: 'If this email belongs to an account with a mobile number, we have sent a 6-digit code to that phone.' };
-    if (!u || !u.active || u.pending || !u.phone) {
+    const generic = {
+      ok: true,
+      message: this.mail.configured
+        ? 'If this email belongs to an account, we have emailed it a 6-digit code. Check your inbox (and spam folder).'
+        : 'If this email belongs to an account with a mobile number, we have sent a 6-digit code to that phone.',
+    };
+    const channel = u && u.active && !u.pending ? this.recoveryChannel(u) : null;
+    if (!u || !channel) {
       this.auth.recordAttempt(email, u?.id ?? null, client, false);
       return generic;
     }
-    const sent = await this.issue(u, 'recover', (c) => `Slay: your account recovery code is ${c}. It expires in ${CODE_MINUTES} minutes. If you did not ask for it, tell your team.`);
+    const sent = await this.issue(
+      u,
+      'recover',
+      (c) => `Slay: your account recovery code is ${c}. It expires in ${CODE_MINUTES} minutes. If you did not ask for it, tell your team.`,
+      channel,
+    );
     return { ...generic, ...('demo_code' in sent ? { demo_code: sent.demo_code, to: sent.to } : {}) };
   }
 
   async finish(input: { email: string; code: string; password: string }, client: ClientInfo) {
     this.auth.checkIpLimit(client.ip);
     const u = this.auth.findByLogin(input.email);
-    if (!u || !u.active || u.pending || !u.phone) {
+    if (!u || !u.active || u.pending) {
       this.auth.recordAttempt(input.email, u?.id ?? null, client, false);
       throw new HttpError(400, 'That code is not right. Ask for a new one.', 'bad_code');
     }
+    const sentTo = (this.ctx.db.prepare(`SELECT phone FROM one_time_codes WHERE user_id = ? AND purpose = 'recover' ORDER BY id DESC LIMIT 1`).get(u.id) as { phone: string } | undefined)?.phone ?? '';
+    const byEmail = sentTo.includes('@');
     try {
       this.check(u, 'recover', input.code);
     } catch (e) {
@@ -139,15 +186,16 @@ export class RecoveryService {
     }
     this.auth.setPassword(u.id, input.password); // also clears a lockout
     const { db } = this.ctx;
-    // Whoever might have had access is signed out; the code proved this person holds the phone.
+    // Whoever might have had access is signed out.
     db.prepare('DELETE FROM sessions WHERE user_id = ?').run(u.id);
-    db.prepare('UPDATE users SET phone_verified_at = COALESCE(phone_verified_at, ?) WHERE id = ?').run(new Date().toISOString(), u.id);
+    // A code by SMS also proved this person holds the phone.
+    if (!byEmail) db.prepare('UPDATE users SET phone_verified_at = COALESCE(phone_verified_at, ?) WHERE id = ?').run(new Date().toISOString(), u.id);
     this.auth.recordAttempt(input.email, u.id, client, true);
     logActivity(this.ctx, u.id, 'password_recovered', 'user', u.id, { ip: client.ip });
     this.alerts.raise(
       'password_recovered',
       'warning',
-      `${u.display_name} reset their password with a code sent to ${maskPhone(u.phone)}. All their other devices were signed out. If this wasn't them, switch the account off under Team.`,
+      `${u.display_name} reset their password with a code sent to ${byEmail ? maskEmail(sentTo) : maskPhone(sentTo)}. All their other devices were signed out. If this wasn't them, switch the account off under Team.`,
       { ip: client.ip },
       u.id,
     );

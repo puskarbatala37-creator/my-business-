@@ -130,10 +130,10 @@ export class AuthService {
   /** What the signed-in person still has to add before using the app. */
   profile(userId: number) {
     const u = this.getUser(userId);
-    const missing: ('email' | 'phone' | 'verify_phone')[] = [];
+    // Only the email is required: it's how people sign in and get recovery codes. A phone number
+    // is optional (and can be confirmed later under More).
+    const missing: 'email'[] = [];
     if (!u.email) missing.push('email');
-    if (!u.phone) missing.push('phone');
-    else if (!u.phone_verified_at && this.smsReady) missing.push('verify_phone');
     return {
       id: u.id,
       email: u.email,
@@ -162,10 +162,11 @@ export class AuthService {
         }
       }
       if (patch.phone !== undefined) {
-        const phone = requireMobile(patch.phone);
+        // Empty = remove the phone number (it's optional).
+        const phone = patch.phone.trim() ? requireMobile(patch.phone) : null;
         if (phone !== u.phone) {
           this.ctx.db.prepare('UPDATE users SET phone = ?, phone_verified_at = NULL WHERE id = ?').run(phone, u.id);
-          changes.push(`${u.phone ? 'changed' : 'added'} their recovery phone number (${maskPhone(phone)})`);
+          changes.push(phone ? `${u.phone ? 'changed' : 'added'} their phone number (${maskPhone(phone)})` : 'removed their phone number');
         }
       }
     })();
@@ -359,7 +360,7 @@ export class AuthService {
    * Someone creates their own account from the sign-in screen. Depending on the owners' setting
    * they wait for approval, join straight away as a team member, or can't sign up at all.
    */
-  signup(input: { email: string; displayName: string; phone: string; password: string }, client: ClientInfo) {
+  signup(input: { email: string; displayName: string; phone?: string | null; password: string }, client: ClientInfo) {
     if (this.userCount() === 0) throw new HttpError(409, 'This app has not been set up yet. The first owner creates their account with the setup code.');
     const mode = this.signupMode;
     if (mode === 'closed') throw new HttpError(403, 'New accounts are added by an owner. Ask them to add you under More → Team.', 'signups_closed');
@@ -367,7 +368,7 @@ export class AuthService {
     const recent = (this.ctx.db.prepare(`SELECT COUNT(*) AS n FROM login_attempts WHERE ip = ? AND username LIKE 'signup:%' AND created_at >= ?`).get(client.ip, since) as { n: number }).n;
     if (recent >= SIGNUPS_PER_IP_PER_HOUR) throw new HttpError(429, 'Too many sign-ups from this connection. Please try again in an hour.');
 
-    const { id } = this.createUser({ email: input.email, displayName: input.displayName, password: input.password, phone: input.phone, role: 'member' });
+    const { id } = this.createUser({ email: input.email, displayName: input.displayName, password: input.password, phone: input.phone || null, role: 'member' });
     const pending = mode === 'approval';
     if (pending) this.ctx.db.prepare('UPDATE users SET pending = 1 WHERE id = ?').run(id);
     this.recordAttempt(`signup:${normalizeEmail(input.email)}`, id, client, true);

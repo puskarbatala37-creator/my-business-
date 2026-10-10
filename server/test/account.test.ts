@@ -21,16 +21,17 @@ describe('email sign-in', () => {
     expect(me.user).toMatchObject({ email: 'teza@example.com', phone: '9841000001', missing: [] });
   });
 
-  it('first-run setup asks for email and mobile number', async () => {
+  it('first-run setup needs an email; the mobile number is optional', async () => {
     const { createApp } = await import('../src/app.js');
     const { loadConfig } = await import('../src/config.js');
     const { ctx, app } = createApp(loadConfig({ dbFile: ':memory:', appUrl: 'http://slay.test', webDist: '/x', initialUsers: '' }));
     const code = (ctx.services.auth as any).setupCode;
     const base = { code, displayName: 'Teza', password: 'teza-pass-1' };
-    expect((await post(app, '/api/auth/setup', { ...base, email: 'teza@example.com' })).status).toBe(400); // no phone
     expect((await post(app, '/api/auth/setup', { ...base, email: 'nope', phone: '9841234567' })).status).toBe(400);
+    // A number that is given must be a real mobile number.
     expect((await post(app, '/api/auth/setup', { ...base, email: 'teza@example.com', phone: '12345' })).body.error).toContain('valid mobile number');
-    const ok = await post(app, '/api/auth/setup', { ...base, email: 'Teza@Example.com', phone: '+977 984-1234567' });
+    // No phone at all (or an empty field) is fine.
+    const ok = await post(app, '/api/auth/setup', { ...base, email: 'Teza@Example.com', phone: '' });
     expect(ok.status).toBe(200);
     expect(ok.body.user.email).toBe('teza@example.com');
   });
@@ -41,19 +42,27 @@ describe('email sign-in', () => {
     expect((await teza.post('/api/auth/team', { email: 'sita@example.com', displayName: 'Sita', password: 'sita-pass-1', phone: '123' })).status).toBe(400);
     expect((await teza.post('/api/auth/team', { email: 'sita@example.com', displayName: 'Sita', password: 'sita-pass-1' })).status).toBe(201);
     const sita = w(await login(app, 'sita@example.com', 'sita-pass-1'));
-    // Sita adds her own phone on first sign-in.
-    expect((await sita.get('/api/auth/me')).body.user.missing).toEqual(['phone']);
-    const res = await sita.patch('/api/auth/profile', { phone: '9800000001' });
-    expect(res.body.user.missing).toEqual([]);
+    // Nothing to add before using the app; a phone can be added (or removed) later.
+    expect((await sita.get('/api/auth/me')).body.user.missing).toEqual([]);
+    expect((await sita.patch('/api/auth/profile', { phone: '+61 412 345 678' })).body.user.phone).toBe('+61412345678');
+    expect((await sita.patch('/api/auth/profile', { phone: '' })).body.user.phone).toBeNull();
+  });
+
+  it('self sign-up works without a phone number', async () => {
+    const { app } = setup();
+    const teza = w(await login(app, 'teza', 'password-teza'));
+    await teza.put('/api/auth/team/signup-mode', { mode: 'open' });
+    const r = await post(app, '/api/auth/signup', { email: 'gita@example.com', displayName: 'Gita', password: 'gita-pass-1' });
+    expect(r.status).toBeLessThan(300);
   });
 });
 
 describe('confirming a phone number by SMS', () => {
-  it('asks to confirm the phone once SMS is set up', async () => {
+  it('a phone number can be confirmed by SMS (optional – never blocks using the app)', async () => {
     const { app, ctx } = setup();
     const sms = captureSms(ctx);
     const teza = w(await login(app, 'teza', 'password-teza'));
-    expect((await teza.get('/api/auth/me')).body.user.missing).toEqual(['verify_phone']);
+    expect((await teza.get('/api/auth/me')).body.user).toMatchObject({ missing: [], phoneVerified: false });
     const sent = (await teza.post('/api/auth/profile/phone/send-code')).body;
     expect(sent.to).toBe('98•••••001');
     expect(sms.sent[0].to).toBe('9841000001');
@@ -62,16 +71,60 @@ describe('confirming a phone number by SMS', () => {
     expect(wrong.body.error).toContain('4 tries left');
     const ok = await teza.post('/api/auth/profile/phone/verify', { code: sms.lastCode() });
     expect(ok.body.user).toMatchObject({ phoneVerified: true, missing: [] });
-    // Changing the number needs a new confirmation – and tells the team.
-    expect((await teza.patch('/api/auth/profile', { phone: '9811111111' })).body.user.missing).toEqual(['verify_phone']);
+    // Changing the number makes it unconfirmed again – and tells the team.
+    expect((await teza.patch('/api/auth/profile', { phone: '9811111111' })).body.user).toMatchObject({ phoneVerified: false, missing: [] });
     const partner = w(await login(app, 'partner', 'password-partner'));
     const alert = (await partner.get('/api/security/alerts')).body.alerts.find((a: any) => a.kind === 'account_details_changed');
     expect(alert).toMatchObject({ severity: 'warning' });
-    expect(alert.message).toContain('recovery phone number');
+    expect(alert.message).toContain('phone number');
   });
 });
 
-describe('forgot password: recovery code by SMS', () => {
+function captureMail(ctx: any) {
+  const sent: { to: string[]; subject: string; text: string }[] = [];
+  ctx.services.mail = { configured: true, send: async (to: string[], subject: string, text: string) => void sent.push({ to, subject, text }) };
+  const lastCode = () => sent.filter((m) => m.subject === 'Your Slay code').at(-1)?.text.match(/\b(\d{6})\b/)?.[1] ?? '';
+  return { sent, lastCode };
+}
+
+describe('forgot password: recovery code by email (the main way)', () => {
+  it('emails the code when email is set up – even with a phone on the account', async () => {
+    const { app, ctx } = setup();
+    const sms = captureSms(ctx);
+    const mail = captureMail(ctx);
+    const start = await post(app, '/api/auth/recover', { email: 'teza@example.com' });
+    expect(start.status).toBe(200);
+    expect(start.body.message).toMatch(/emailed/);
+    expect(sms.sent).toHaveLength(0);
+    const codeMail = mail.sent.find((m) => m.subject === 'Your Slay code')!;
+    expect(codeMail.to).toEqual(['teza@example.com']);
+    const good = await post(app, '/api/auth/recover/reset', { email: 'teza@example.com', code: mail.lastCode(), password: 'brand-new-pass' });
+    expect(good.status).toBe(200);
+    await login(app, 'teza', 'brand-new-pass');
+    const partner = w(await login(app, 'partner', 'password-partner'));
+    const alert = (await partner.get('/api/security/alerts')).body.alerts.find((a: any) => a.kind === 'password_recovered');
+    expect(alert.message).toContain('te••@example.com');
+  });
+
+  it('works for an account with no phone number', async () => {
+    const { app, ctx } = setup();
+    const mail = captureMail(ctx);
+    ctx.db.prepare(`UPDATE users SET phone = NULL WHERE email = 'teza@example.com'`).run();
+    await post(app, '/api/auth/recover', { email: 'teza@example.com' });
+    expect((await post(app, '/api/auth/recover/reset', { email: 'teza@example.com', code: mail.lastCode(), password: 'brand-new-pass' })).status).toBe(200);
+  });
+
+  it('says plainly when the server can send no codes at all', async () => {
+    const { app, ctx } = setup();
+    ctx.services.mail = { configured: false, send: async () => {} };
+    ctx.services.sms = { configured: false, send: async () => {} };
+    const r = await post(app, '/api/auth/recover', { email: 'teza@example.com' });
+    expect(r.status).toBe(503);
+    expect(r.body.error).toMatch(/Ask an owner to reset your password/);
+  });
+});
+
+describe('forgot password: recovery code by SMS (when no email service is set up)', () => {
   it('resets the password with the code and signs out every other device', async () => {
     const { app, ctx } = setup();
     const sms = captureSms(ctx);
@@ -132,13 +185,13 @@ describe('forgot password: recovery code by SMS', () => {
 });
 
 describe('accounts created before email sign-in', () => {
-  it('still sign in with the old username, then add an email and phone once', async () => {
+  it('still sign in with the old username, then add an email once', async () => {
     const { app, ctx } = setup();
     const bcrypt = (await import('bcryptjs')).default;
     ctx.db.prepare(`INSERT INTO users (username, display_name, password_hash, role) VALUES ('ram', 'Ram', ?, 'member')`).run(bcrypt.hashSync('ram-pass-11', 4));
     const ram = w(request.agent(app));
     expect((await ram.post('/api/auth/login', { username: 'ram', password: 'ram-pass-11' })).status).toBe(200);
-    expect((await ram.get('/api/auth/me')).body.user.missing).toEqual(['email', 'phone']);
+    expect((await ram.get('/api/auth/me')).body.user.missing).toEqual(['email']);
     expect((await ram.patch('/api/auth/profile', { email: 'teza@example.com' })).status).toBe(409); // taken
     expect((await ram.patch('/api/auth/profile', { email: 'Ram@Example.com', phone: '9812345678' })).body.user.missing).toEqual([]);
     await login(app, 'ram@example.com', 'ram-pass-11');

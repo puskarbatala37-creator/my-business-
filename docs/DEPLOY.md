@@ -87,7 +87,8 @@ on every restart.)
 
 ## Part 2 – Sparrow SMS (text-message codes for Nepali numbers)
 
-Sparrow SMS sends the codes for confirming phone numbers and "Forgot password?". Their sign-up
+**Optional** – recovery codes go by email (Part 3). SMS is only needed if you want text messages: confirming
+phone numbers, and "Forgot password?" codes when no email service is set up. Their sign-up
 process and prices can change – follow what their site shows if it differs from this.
 
 1. Go to **sparrowsms.com** → *Register / Sign up*. Create the account and verify your email/phone.
@@ -114,7 +115,7 @@ process and prices can change – follow what their site shows if it differs fro
    - Red → the exact message from Sparrow is shown (e.g. *Invalid Token*, *Invalid Sender*, *insufficient
      credit*). Fix that in Sparrow / Railway and try again (up to 5 tests an hour).
 
-Once this works, new team members must confirm their phone number by code, and "Forgot password?"
+Once this works, people can confirm their phone number under More, and "Forgot password?"
 sends real codes.
 
 **Twilio instead?** Set `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM`
@@ -122,11 +123,34 @@ sends real codes.
 
 ---
 
-## Part 3 – Optional extras
+## Part 3 – Email for "Forgot password?" codes (recommended)
+
+Recovery codes go **by email** (the phone number is optional). Until email is set up, "Forgot password?"
+can't send codes (unless SMS from Part 2 is set up and the person added a phone) – an owner can still
+reset anyone's password under **More → Team**.
+
+With a Gmail account (a separate one for the shop is best):
+1. Google Account → **Security** → turn on **2-Step Verification**.
+2. Search the Google Account page for **App passwords** → create one named `Slay` → copy the 16 letters.
+3. On Render: service → **Environment** → add (Railway: *Variables*):
+
+   | Name | Value |
+   |---|---|
+   | `SMTP_URL` | `smtps://yourshop%40gmail.com:THE16LETTERS@smtp.gmail.com` (`%40` stands for the `@` in your address; no spaces in the app password) |
+   | `MAIL_FROM` | `Slay <yourshop@gmail.com>` |
+
+   Enter these only on Render – don't paste the app password into chats.
+4. After the restart: **More → Setup check → Email → Send test email**. Then sign out and try
+   **Forgot password?** once to see the code arrive (check spam the first time).
+
+Security notifications are emailed to the team as well once this is set up.
+
+---
+
+## Part 4 – Optional extras
 
 | What | Variables | Notes |
 |---|---|---|
-| Email copies of security alerts | `SMTP_URL`, `MAIL_FROM` | Gmail: turn on 2-step verification, create an *App password*, then `SMTP_URL=smtps://you%40gmail.com:APP-PASSWORD@smtp.gmail.com`. Test with *Setup check → Send test email*. |
 | Nepali voice entry on iPhone | `TRANSCRIBE_API_KEY` (+ `TRANSCRIBE_API_URL`, `TRANSCRIBE_MODEL`) | Android Chrome understands Nepali speech itself; iPhones need a speech-to-text service (OpenAI Whisper or compatible) for Nepali. English works on both without it. |
 | Real eSewa payments | `ESEWA_MODE=production`, `ESEWA_PRODUCT_CODE`, `ESEWA_SECRET_KEY` | From your eSewa merchant account. |
 

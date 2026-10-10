@@ -27,7 +27,7 @@ export function ConfirmPhone({ phone, onConfirmed }: { phone: string; onConfirme
       {!sent ? (
         <>
           <div className="small">
-            We'll text a 6-digit code to <strong className="num">{phone}</strong> to make sure recovery codes reach you.
+            We'll text a 6-digit code to <strong className="num">{phone}</strong> to make sure texts reach you.
           </div>
           {error && <div className="alert-banner">{error}</div>}
           <button type="button" className="btn primary block" onClick={send} disabled={busy}>
@@ -68,8 +68,8 @@ export function ConfirmPhone({ phone, onConfirmed }: { phone: string; onConfirme
 }
 
 /**
- * Shown after sign-in until the account has a sign-in email and a (confirmed) mobile number.
- * New team members and accounts created before email sign-in see it once.
+ * Shown after sign-in until the account has a sign-in email (older accounts that signed in with a
+ * username). A phone number is optional.
  */
 export function CompleteAccountPage({ profile }: { profile: Profile }) {
   const qc = useQueryClient();

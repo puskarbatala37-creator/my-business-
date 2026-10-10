@@ -136,8 +136,8 @@ function SmsTest({ s }: { s: Status }) {
       status={s.sms.configured ? provider : 'Not yet'}
       detail={
         s.sms.configured
-          ? `Sending as “${s.sms.from}”. Used for confirming phone numbers and “Forgot password?” codes.`
-          : 'No SMS service is connected, so phone numbers aren’t confirmed and “Forgot password?” can’t send codes. Set SMS_PROVIDER=sparrow with SPARROW_SMS_TOKEN and SPARROW_SMS_FROM on the server.'
+          ? `Sending as “${s.sms.from}”. Used for confirming phone numbers (and “Forgot password?” codes if email isn’t set up).`
+          : 'Optional. No SMS service is connected, so phone numbers can’t be confirmed by text. Set SMS_PROVIDER=sparrow with SPARROW_SMS_TOKEN and SPARROW_SMS_FROM on the server.'
       }
     >
       {s.sms.configured && (
@@ -172,7 +172,7 @@ function EmailTest({ configured }: { configured: boolean }) {
       title="Email"
       ok={configured}
       status={configured ? 'Set up' : 'Optional'}
-      detail={configured ? 'Security notifications are also emailed.' : 'Optional: set SMTP_URL and MAIL_FROM on the server to also email security notifications.'}
+      detail={configured ? '“Forgot password?” codes and security notifications are emailed.' : 'Not set up: “Forgot password?” can’t email codes yet. Set SMTP_URL and MAIL_FROM on the server (see DEPLOY.md, Part 3).'}
     >
       {configured && (
         <>
