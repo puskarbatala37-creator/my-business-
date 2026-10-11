@@ -1,3 +1,4 @@
+import { storageLines, storageReport } from '../../core/storage.js';
 import crypto from 'node:crypto';
 import { Router, type Request, type RequestHandler, type Response } from 'express';
 import { z } from 'zod';
@@ -62,7 +63,16 @@ export const authModule: AppModule = {
     };
 
     // ── First-run setup: create the first owner from the app (no command line needed) ──
-    r.get('/setup', (_req, res) => res.json({ needsSetup: auth().userCount() === 0 }));
+    r.get('/setup', (_req, res) => {
+      const needsSetup = auth().userCount() === 0;
+      // On a live server, an empty database plus no permanent disk means earlier accounts were wiped
+      // by a deploy – say so right on the setup screen instead of silently starting over.
+      const storage = needsSetup && ctx.config.isProduction ? storageReport(ctx.db, ctx.config.dataDir) : null;
+      res.json({
+        needsSetup,
+        ...(storage?.permanent === false ? { storageWarning: storageLines(storage).lines.slice(2).map((l) => l.replace(/^\[storage\]\s*(✗ )?/, '')).join(' ') } : {}),
+      });
+    });
     r.post('/setup', (req, res) => {
       const b = parse(
         z.object({ code: z.string(), email: zEmail, displayName: z.string().trim().min(1).max(80), phone: zPhone.optional(), password: zPassword }),

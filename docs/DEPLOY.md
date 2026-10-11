@@ -35,6 +35,12 @@ Docker build, a server in Singapore (closest to Nepal), the health check, and a 
    owner account.
 7. **More → Setup check** → "Secure web address (https)" should say **Set up**.
 
+**Check the disk is really used** – open **Logs** after a deploy and look for the `[storage]` lines:
+`✓ Data is on a permanent disk` is right. `✗ WARNING: the data folder is NOT on a permanent disk` means
+every deploy starts empty (and asks for a new setup code): the log line says what to fix – usually the
+disk's **Mount Path** isn't exactly `/data` (service → **Disks**), or no disk is attached. The same check
+is under **More → Setup check → Permanent storage**.
+
 Every push to the branch redeploys automatically; the disk (data) is kept. With a disk, each deploy has
 about a minute of downtime. **Backups:** Render takes daily snapshots of the disk (service → *Disks*);
 also save Slay's own backup weekly (More → Backups, see [BACKUPS.md](BACKUPS.md)).

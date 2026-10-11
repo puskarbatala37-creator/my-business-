@@ -1,3 +1,4 @@
+import { dateTime } from '../../lib/format';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
@@ -15,6 +16,7 @@ interface Status {
   esewa: 'test' | 'production';
   voiceServer: boolean;
   myPhone: string | null;
+  storage: { dataDir: string; permanent: boolean | null; mount: string | null; otherDisks: string[]; createdAt: string | null; accounts: number; orders: number };
 }
 
 type Result = { ok: boolean; text: string; at: string } | null;
@@ -49,6 +51,20 @@ export function SetupCheckPage() {
                 s.https
                   ? `Slay runs at ${s.appUrl}. Phone notifications, fingerprint / face sign-in and installing to the home screen need this.`
                   : `APP_URL is ${s.appUrl}. Deploy Slay to an https:// address (on Render it's picked up automatically; elsewhere set APP_URL to it), or phone notifications, fingerprint sign-in and installing won't work.`
+              }
+            />
+            <Item
+              title="Permanent storage"
+              ok={s.storage.permanent !== false}
+              status={s.storage.permanent ? 'Safe' : s.storage.permanent === false ? 'NOT SAFE' : 'Unknown'}
+              detail={
+                s.storage.permanent === false
+                  ? `Your data (${s.storage.dataDir}) is not on a permanent disk, so everything is lost on the next deploy or restart. ${
+                      s.storage.otherDisks.length
+                        ? `A disk is attached at ${s.storage.otherDisks.join(', ')} – change its mount path to ${s.storage.dataDir}, or set DATA_DIR=${s.storage.otherDisks[0]} on the server.`
+                        : `Add a disk with mount path ${s.storage.dataDir} on the server (Render: service → Disks).`
+                    } Save a backup first (More → Backups).`
+                  : `Data is kept on ${s.storage.mount ?? s.storage.dataDir}: ${s.storage.accounts} accounts, ${s.storage.orders} orders, database started ${s.storage.createdAt ? dateTime(s.storage.createdAt) : '—'}. It stays across deploys.`
               }
             />
             <SmsTest s={s} />

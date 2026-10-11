@@ -1,3 +1,4 @@
+import { storageReport } from '../../core/storage.js';
 import { Router } from 'express';
 import { z } from 'zod';
 import type { AppModule } from '../../core/context.js';
@@ -43,6 +44,7 @@ export const systemModule: AppModule = {
         esewa: config.esewa.mode,
         voiceServer: !!config.transcribe.apiKey,
         myPhone: me?.phone ?? null,
+        storage: storageReport(ctx.db, config.dataDir),
       });
     });
 

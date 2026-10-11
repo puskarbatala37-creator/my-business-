@@ -23,7 +23,7 @@ const markPasswordLogin = () => {
  */
 export function LoginPage() {
   const qc = useQueryClient();
-  const setup = useQuery({ queryKey: ['setup'], queryFn: () => api.get<{ needsSetup: boolean }>('/api/auth/setup') });
+  const setup = useQuery({ queryKey: ['setup'], queryFn: () => api.get<{ needsSetup: boolean; storageWarning?: string }>('/api/auth/setup') });
   const [bio, setBio] = useState<boolean | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [recovering, setRecovering] = useState(false);
@@ -54,7 +54,7 @@ export function LoginPage() {
   }
 
   if (setup.isLoading || bio === null) return <Spinner />;
-  if (setup.data?.needsSetup) return <SetupPage onDone={signedIn} />;
+  if (setup.data?.needsSetup) return <SetupPage onDone={signedIn} storageWarning={setup.data.storageWarning} />;
   if (recovering) return <RecoverPage initialEmail={email} onDone={signedIn} onCancel={() => setRecovering(false)} />;
   if (signingUp) return <SignupPage mode={signupMode.data?.mode ?? 'approval'} onDone={signedIn} onCancel={() => setSigningUp(false)} />;
 
@@ -341,7 +341,7 @@ function RecoverPage({ initialEmail, onDone, onCancel }: { initialEmail: string;
 }
 
 /** First start: create the first owner account in the app (setup code is in the server log). */
-function SetupPage({ onDone }: { onDone: () => void }) {
+function SetupPage({ onDone, storageWarning }: { onDone: () => void; storageWarning?: string }) {
   const [f, setF] = useState({ code: '', displayName: '', email: '', phone: '', password: '' });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -374,6 +374,14 @@ function SetupPage({ onDone }: { onDone: () => void }) {
           <div className="brand"><BrandMark width={128} /></div>
           <div className="small muted">Welcome! Create the first owner account. You can add the rest of the team from the app afterwards.</div>
         </div>
+        {storageWarning && (
+          <div className="alert-banner" role="alert">
+            <span>
+              <strong>This server isn’t keeping data permanently.</strong> If you set up Slay before, that data was wiped by a deploy or restart – and anything you
+              add now will be lost the same way. {storageWarning}
+            </span>
+          </div>
+        )}
         {field('code', 'Setup code (shown in the server log)', { inputMode: 'numeric', autoComplete: 'off' })}
         {field('displayName', 'Your name', { autoComplete: 'name' })}
         {field('email', 'Email – you sign in with this', { type: 'email', inputMode: 'email', autoCapitalize: 'none', autoComplete: 'email' })}
