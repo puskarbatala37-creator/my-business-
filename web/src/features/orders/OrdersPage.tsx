@@ -7,7 +7,7 @@ import { HeaderActions } from '../../components/Layout';
 import { useCatalog } from '../../components/VariantPicker';
 import { Empty, FulfillmentBadge, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar } from '../../components/ui';
 import { api, qs } from '../../lib/api';
-import { npr, shortDate } from '../../lib/format';
+import { dueTone, npr, relativeDue, shortDate } from '../../lib/format';
 import { datePresets } from '../../lib/periods';
 import type { OrderSearchResult, OrderSummary } from '../../lib/types';
 
@@ -36,9 +36,12 @@ export function useDebounced<T>(value: T, ms = 250) {
 }
 
 export function OrderRow({ o }: { o: OrderSummary }) {
+  const today = todayInBusinessTz();
+  // Only while it still has to go out: a countdown to the delivery date the customer was promised.
+  const due = o.delivery_due_date && o.state === 'active' && o.fulfillment_status === 'pending' ? o.delivery_due_date : null;
   return (
     <Link to={`/orders/${o.id}`} className="list-item">
-      <Thumb src={o.thumb} />
+      <Thumb src={o.thumb} caption={o.items_summary ?? o.customer_name ?? ''} />
       <div className="grow">
         <div className="row between">
           <span className="strong ellipsis">{o.customer_name}</span>
@@ -50,6 +53,11 @@ export function OrderRow({ o }: { o: OrderSummary }) {
           {o.categories ? ` · ${o.categories.split(',').join(', ')}` : ''}
         </div>
         <div className="row wrap" style={{ gap: 6, marginTop: 4 }}>
+          {due && (
+            <span className={`badge ${dueTone(due, today)}`} title={`Delivery due ${shortDate(due)}`}>
+              {relativeDue(due, today).replace(/^./, (c) => c.toUpperCase())} · {shortDate(due)}
+            </span>
+          )}
           <PlatformBadge platform={o.platform} />
           <PaymentBadge status={o.payment_status} balance={o.balance_due} />
           <FulfillmentBadge status={o.fulfillment_status} state={o.state} />

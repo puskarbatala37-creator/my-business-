@@ -3,6 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { useNavigate } from 'react-router-dom';
 import { uploadPhoto } from '../lib/image';
 import { Icon } from './Icon';
+import { openPhoto } from './PhotoViewer';
 import { OfflineBar } from './OfflineBar';
 
 // ── Toasts ──────────────────────────────────────────────────────────────
@@ -187,8 +188,30 @@ export function Stepper({ value, onChange, min = 1, max = 999 }: { value: number
   );
 }
 
-export function Thumb({ src, size = 'md' }: { src?: string | null; size?: 'md' | 'lg' }) {
-  return <div className={`thumb ${size === 'lg' ? 'lg' : ''}`}>{src ? <img src={src} alt="" loading="lazy" /> : <Icon name="image" size={20} />}</div>;
+/**
+ * A small photo. With `caption` (e.g. "Cotton Kurta – Maroon") and a photo, tapping it opens the photo
+ * full screen – without also opening the row it sits in.
+ */
+export function Thumb({ src, size = 'md', caption }: { src?: string | null; size?: 'md' | 'lg'; caption?: string }) {
+  const cls = `thumb ${size === 'lg' ? 'lg' : ''}`;
+  if (!src || caption === undefined) return <div className={cls}>{src ? <img src={src} alt="" loading="lazy" /> : <Icon name="image" size={20} />}</div>;
+  const open = (e: { preventDefault(): void; stopPropagation(): void }) => {
+    e.preventDefault(); // not the link / row around it
+    e.stopPropagation();
+    openPhoto(src, caption);
+  };
+  return (
+    <span
+      role="button"
+      tabIndex={0}
+      className={`${cls} zoomable`}
+      aria-label={`View photo larger${caption ? `: ${caption}` : ''}`}
+      onClick={open}
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && open(e)}
+    >
+      <img src={src} alt="" loading="lazy" />
+    </span>
+  );
 }
 
 /** Tap to take a photo with the camera (or choose from the gallery). Uploads immediately. */
@@ -273,6 +296,18 @@ export function PhotoInput({
               <Icon name="image" /> Choose from gallery
               {picker(false)}
             </label>
+            {value && (
+              <button
+                type="button"
+                className="btn block"
+                onClick={() => {
+                  setChoosing(false);
+                  openPhoto(value, label === 'Photo' ? undefined : label);
+                }}
+              >
+                <Icon name="search" size={18} /> View larger
+              </button>
+            )}
             {value && (
               <button
                 type="button"

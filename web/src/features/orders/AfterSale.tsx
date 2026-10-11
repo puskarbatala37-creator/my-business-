@@ -185,7 +185,7 @@ export function ReturnSheet({ order, onClose, onSave, saving }: { order: OrderDe
                 const can = returnable(i);
                 return (
                   <div key={i.id} className="list-item" style={{ flexWrap: 'wrap' }}>
-                    <Thumb src={i.photo} />
+                    <Thumb src={i.photo} caption={`${i.product_name} – ${i.color}`} />
                     <div className="grow">
                       <div className="strong small">{i.product_name}</div>
                       <div className="tiny muted">

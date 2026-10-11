@@ -215,7 +215,7 @@ export function OrderDetailPage() {
           <div className="list">
             {o.items.map((i) => (
               <div key={i.id} className="list-item">
-                <Thumb src={i.photo} size="lg" />
+                <Thumb src={i.photo} size="lg" caption={`${i.product_name} – ${i.color}${i.size ? ` · ${i.size}` : ''}`} />
                 <div className="grow">
                   <div className="strong">{i.product_name}</div>
                   <div className="small">

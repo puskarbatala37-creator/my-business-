@@ -26,11 +26,21 @@ export function monthLabel(ym: string) {
   return new Date(ym + '-01T00:00:00Z').toLocaleDateString('en-GB', { month: 'short', timeZone: 'UTC' });
 }
 
+/** Days from `today` to `date` (both YYYY-MM-DD): 0 = today, negative = past. */
+export const daysUntil = (date: string, today: string) => Math.round((Date.parse(date) - Date.parse(today)) / 86_400_000);
+
+/** "due in 2 days", "due tomorrow", "due today", "3 days overdue". */
 export function relativeDue(date: string | null, today: string) {
   if (!date) return '';
-  const diff = Math.round((Date.parse(date) - Date.parse(today)) / 86_400_000);
-  if (diff < 0) return `${-diff}d overdue`;
+  const diff = daysUntil(date, today);
+  if (diff < 0) return `${-diff} day${diff === -1 ? '' : 's'} overdue`;
   if (diff === 0) return 'due today';
   if (diff === 1) return 'due tomorrow';
-  return `due in ${diff}d`;
+  return `due in ${diff} days`;
+}
+
+/** Badge colour for a delivery date: red when late, amber within 2 days, grey otherwise. */
+export function dueTone(date: string, today: string) {
+  const diff = daysUntil(date, today);
+  return diff < 0 ? 'bad' : diff <= 2 ? 'warn' : 'neutral';
 }

@@ -69,8 +69,8 @@ export function StockPage() {
                     </Link>
                     <div className="list" style={{ border: 0, boxShadow: 'none' }}>
                       {p.variants.map((v) => (
-                        <button key={v.id} type="button" className="list-item" style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left', padding: '8px 0', minHeight: 0 }} onClick={() => setAdjust({ v, p })}>
-                          <Thumb src={v.photo} />
+                        <button key={v.id} type="button" className="list-item" style={{ width: '100%', border: 0, background: 'transparent', textAlign: 'left', padding: '8px 0', minHeight: 0 }} onClick={() => setAdjust({ v, p })} aria-label={`${p.name} ${v.color}: ${v.stock} in stock – change stock`}>
+                          <Thumb src={v.photo} caption={`${p.name} – ${v.color}`} />
                           <div className="grow">
                             <div className="strong">{v.color}</div>
                             <div className="tiny muted num">
@@ -117,7 +117,7 @@ function AdjustSheet({ v, p, onClose }: { v: Variant; p: Product; onClose: () =>
     <Sheet title={`${p.name} – ${v.color}`} onClose={onClose}>
       <div className="stack">
         <div className="row">
-          <Thumb src={v.photo} size="lg" />
+          <Thumb src={v.photo} size="lg" caption={`${p.name} – ${v.color}`} />
           <div>
             <div className="strong" style={{ fontSize: 22 }}>
               {v.stock} in stock

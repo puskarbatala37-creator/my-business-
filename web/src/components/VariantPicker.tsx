@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { npr } from '../lib/format';
 import type { Category, Product, Variant } from '../lib/types';
 import { Icon } from './Icon';
+import { openPhoto } from './PhotoViewer';
 import { Empty, Sheet, Spinner } from './ui';
 
 export interface PickedVariant {
@@ -104,9 +105,26 @@ export function VariantPicker({
                     type="button"
                     className={`variant-tile ${out ? 'out' : ''}`}
                     disabled={out}
+                    aria-label={`${v.color} – ${out ? 'out of stock' : `${available} left, ${npr(v.price)}`}`}
                     onClick={() => onPick({ variant: v, product: g.product, category: g.category })}
                   >
-                    <div className="ph">{v.photo ? <img src={v.photo} alt="" loading="lazy" /> : <Icon name="image" />}</div>
+                    <div className="ph">
+                      {v.photo ? <img src={v.photo} alt="" loading="lazy" /> : <Icon name="image" />}
+                      {v.photo && (
+                        // Tapping the tile picks the colour; this small button only shows the photo large.
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          className="zoom-badge"
+                          aria-label={`View ${g.product.name} ${v.color} photo larger`}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            openPhoto(v.photo!, `${g.product.name} – ${v.color}`);
+                          }}
+                        />
+                      )}
+                    </div>
                     <div className="small strong ellipsis">{v.color}</div>
                     <div className="tiny muted">{out ? 'Out of stock' : `${available} left · ${npr(v.price)}`}</div>
                   </button>

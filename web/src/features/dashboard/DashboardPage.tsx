@@ -199,7 +199,7 @@ export function DashboardPage() {
                 <div className="list">
                   {d.low_stock.map((v) => (
                     <div key={v.id} className="list-item">
-                      <Thumb src={v.photo} />
+                      <Thumb src={v.photo} caption={`${v.product_name} – ${v.color}`} />
                       <div className="grow">
                         <div className="strong ellipsis">{v.product_name}</div>
                         <div className="small muted">{v.color}</div>

@@ -1,3 +1,4 @@
+import { PhotoViewer } from './components/PhotoViewer';
 import { useFriendlyFormChecks } from './lib/formCheck';
 import { useEffect } from 'react';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
@@ -62,6 +63,7 @@ export function App() {
   return (
     <>
     <InstallPrompt />
+    <PhotoViewer />
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />
