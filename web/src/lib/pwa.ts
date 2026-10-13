@@ -17,6 +17,19 @@ export const inAppBrowser = /FBAN|FBAV|FB_IAB|Instagram|musical_ly|TikTok|Byteda
 /** iOS browser other than Safari (Chrome, Edge, Firefox on iPhone). */
 export const iosOtherBrowser = isIOS && /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
 
+/** iPad (including iPadOS, which reports itself as a Mac with a touch screen). */
+export const isIPad = /iPad/.test(ua) || (/Macintosh/.test(ua) && typeof navigator !== 'undefined' && navigator.maxTouchPoints > 1);
+
+/**
+ * iOS version, e.g. 18.1 – from Safari's "Version/18.1" (the reliable one: iOS 26 still reports
+ * "OS 18_6" in the system part) or else the "OS 17_4" part. Null when not iOS.
+ */
+export function iosVersion(agent = ua): number | null {
+  if (!/iPhone|iPad|iPod|Macintosh/.test(agent)) return null;
+  const v = agent.match(/Version\/(\d+)(?:\.(\d+))?/) ?? agent.match(/OS (\d+)_(\d+)/);
+  return v ? Number(`${v[1]}.${v[2] ?? 0}`) : null;
+}
+
 export function isStandalone() {
   return window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true;
 }
@@ -88,11 +101,10 @@ export function initPwa({ serviceWorker }: { serviceWorker: boolean }) {
 
   // iOS only shows :active (press) styles when the page listens for touches.
   document.addEventListener('touchstart', () => {}, { passive: true });
-  if (isStandalone()) {
-    document.documentElement.classList.add('standalone');
-    // No pinch-zooming the app itself (iOS ignores user-scalable=no).
-    document.addEventListener('gesturestart', (e) => e.preventDefault());
-  }
+  if (isStandalone()) document.documentElement.classList.add('standalone');
+  // No pinch-zooming the whole page – also in Safari, which ignores user-scalable=no: a zoomed-in
+  // screen (e.g. a bill's amount) could otherwise get stuck. Photos zoom in the photo viewer instead.
+  document.addEventListener('gesturestart', (e) => e.preventDefault());
 
   if (serviceWorker && 'serviceWorker' in navigator) {
     // When a new version is installed in the background, switch to it the next time the app

@@ -10,6 +10,7 @@ import { dateTime, npr } from '../../lib/format';
 import { uploadPhoto } from '../../lib/image';
 import type { Receipt } from '../../lib/types';
 import { useDebounced } from '../orders/OrdersPage';
+import { openPhoto } from '../../components/PhotoViewer';
 
 const RANGES = [
   { key: 'all', label: 'All time', from: undefined as string | undefined },
@@ -261,9 +262,11 @@ function ReceiptView({ r, onClose }: { r: Receipt; onClose: () => void }) {
   return (
     <Sheet title={r.supplier || 'Supplier bill'} onClose={onClose}>
       <div className="stack">
-        <a href={r.photo} target="_blank" rel="noreferrer">
-          <img src={r.photo} alt="Supplier bill" style={{ width: '100%', borderRadius: 12 }} />
-        </a>
+        {/* Opens full screen with zoom – and a clear way back (✕, tap outside, Back). */}
+        <button type="button" className="bill-photo" aria-label="View bill full screen" onClick={() => openPhoto(r.photo, `${r.supplier || 'Supplier bill'} · ${npr(r.amount)}`)}>
+          <img src={r.photo} alt="Supplier bill" />
+          <span className="bill-photo-hint">Tap to zoom</span>
+        </button>
         <div className="totals">
           <span className="muted">Amount</span>
           <span className="right strong">{npr(r.amount)}</span>

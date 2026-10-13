@@ -1,5 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { canPromptInstall, inAppBrowser, installedBefore, iosOtherBrowser, isAndroid, isIOS, isStandalone, onInstallChange, promptInstall } from '../lib/pwa';
+import { canPromptInstall, inAppBrowser, installedBefore, iosOtherBrowser, iosVersion, isAndroid, isIOS, isIPad, isStandalone, onInstallChange, promptInstall } from '../lib/pwa';
 import { Icon } from './Icon';
 import { Sheet, useToast } from './ui';
 
@@ -141,18 +141,7 @@ export function InstallPrompt() {
             <Icon name="plus" /> Install Slay
           </button>
         ) : isIOS ? (
-          <ol className="install-steps">
-            <li>
-              Tap <Glyph name="share" /> <strong>Share</strong> {iosOtherBrowser ? 'in the address bar' : 'at the bottom of Safari'}{' '}
-              <span className="muted">(on newer iPhones it's inside the ••• button)</span>
-            </li>
-            <li>
-              Scroll down and tap <Glyph name="add" /> <strong>Add to Home Screen</strong>
-            </li>
-            <li>
-              Tap <strong>Add</strong> – then open Slay from your home screen
-            </li>
-          </ol>
+          <IosSteps />
         ) : isAndroid ? (
           <ol className="install-steps">
             <li>
@@ -180,6 +169,80 @@ export function InstallPrompt() {
         </button>
       </div>
     </Sheet>
+  );
+}
+
+/**
+ * "Add to Home Screen" steps for the exact iPhone / iPad and iOS version. On iOS 18 (and some 17s)
+ * "Add to Home Screen" is often not in the Share list until it's added with "Edit Actions…".
+ */
+function IosSteps() {
+  const v = iosVersion();
+  const major = v ? Math.floor(v) : null;
+  const device = isIPad ? 'iPad' : 'iPhone';
+  const browser = iosOtherBrowser ? (/CriOS/.test(navigator.userAgent) ? 'Chrome' : /EdgiOS/.test(navigator.userAgent) ? 'Edge' : /FxiOS/.test(navigator.userAgent) ? 'Firefox' : 'this browser') : 'Safari';
+  const tooOld = v !== null && v < 16.4;
+  const editActions = (
+    <li>
+      <strong>Don’t see “Add to Home Screen”?</strong> Scroll to the very bottom of that list and tap <strong>Edit Actions…</strong> – then find{' '}
+      <strong>Add to Home Screen</strong>, tap the green <strong>+</strong> next to it, then <strong>Done</strong> – it now shows in the list. Tap it.
+      {major === 18 && <span className="muted"> (On iOS 18 it is often hidden like this.)</span>}
+    </li>
+  );
+  return (
+    <div className="stack" style={{ gap: 8 }}>
+      <div className="tiny muted">
+        {device} · {v ? `iOS ${v}` : 'iOS'} · {browser}
+      </div>
+      {tooOld && (
+        <div className="alert-banner warning">
+          <span>
+            This {device} has iOS {v}. Slay installs, but phone notifications need iOS 16.4 or newer – update in Settings → General → Software Update when you can.
+          </span>
+        </div>
+      )}
+      {iosOtherBrowser && tooOld ? (
+        <ol className="install-steps">
+          <li>Copy this page’s address and open it in <strong>Safari</strong> – on this iOS version only Safari can add apps to the Home Screen.</li>
+        </ol>
+      ) : (
+        <ol className="install-steps">
+          {iosOtherBrowser ? (
+            <li>
+              Tap <Glyph name="share" /> <strong>Share</strong> in {browser}’s address bar{browser === 'Chrome' ? ' (top right)' : ''}.
+            </li>
+          ) : major !== null && major >= 26 ? (
+            <li>
+              Tap <strong>•••</strong> at the bottom right of Safari, then <Glyph name="share" /> <strong>Share</strong>. (If you see <Glyph name="share" />{' '}
+              <strong>Share</strong> straight away, tap that.)
+            </li>
+          ) : (
+            <li>
+              Tap <Glyph name="share" /> <strong>Share</strong> {isIPad ? 'at the top right of Safari, next to the address bar' : 'in the middle of the bar at the bottom of Safari'}.{' '}
+              {!isIPad && <span className="muted">(If the bar is hidden, tap the bottom of the screen once to show it.)</span>}
+            </li>
+          )}
+          <li>
+            Scroll down the list and tap <Glyph name="add" /> <strong>Add to Home Screen</strong>.
+          </li>
+          {editActions}
+          <li>
+            {major !== null && major >= 26 && !iosOtherBrowser ? (
+              <>
+                Leave <strong>Open as Web App</strong> switched on, then tap <strong>Add</strong>.
+              </>
+            ) : (
+              <>
+                Tap <strong>Add</strong> at the top right.
+              </>
+            )}
+          </li>
+          <li>
+            Open Slay from the new <strong>Slay</strong> icon on your Home Screen (not from {browser}). You may need to sign in once more there.
+          </li>
+        </ol>
+      )}
+    </div>
   );
 }
 
