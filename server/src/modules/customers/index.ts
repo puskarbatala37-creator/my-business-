@@ -17,13 +17,18 @@ export const zCustomer = z.object({
 export const customersModule: AppModule = {
   name: 'customers',
   init(ctx) {
-    ctx.services.customers = new CustomerService(ctx);
+    const customers = new CustomerService(ctx);
+    ctx.services.customers = customers;
+    const fixed = customers.normalizeSavedPhones();
+    if (fixed) console.log(`[customers] ${fixed} saved phone number${fixed === 1 ? '' : 's'} rewritten in the standard format`);
   },
   routes(ctx) {
     const r = Router();
     const customers = () => service<CustomerService>(ctx, 'customers');
 
     r.get('/', (req, res) => res.json({ customers: customers().search(String(req.query.q ?? '')) }));
+    // "Same person as …?" – a hint while typing a new customer's name (never an automatic match).
+    r.get('/similar', (req, res) => res.json({ customers: customers().similarByName(String(req.query.name ?? '')) }));
     r.get('/lookup', (req, res) => {
       const c = customers().findByPhone(String(req.query.phone ?? ''));
       res.json(c ? { customer: c, orders: customers().history(c.id, 10) } : { customer: null, orders: [] });

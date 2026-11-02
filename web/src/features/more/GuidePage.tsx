@@ -68,6 +68,26 @@ export function GuidePage() {
           </Tip>
         </Topic>
 
+        <Topic title="Measurements for the tailor">
+          <p>
+            In an order, under an item, tap <b>Measurements (optional)</b>. Tick only the ones you need – bust, waist, hip, pant length, underarm round,
+            chest, neck – and type each number in its own box. Every item can have its own. They show on the order and on the invoice you share or
+            print for the tailor. Skip it when the normal size is enough.
+          </p>
+        </Topic>
+
+        <Topic title="Repeat customers and Insights">
+          <p>
+            Type the customer's phone number – however it's written – and Slay finds them and says “this is their 3rd order”. Their orders show a{' '}
+            <span className="badge repeat">2nd order</span> badge. If a new number comes with a name like an existing customer's, Slay asks “Same person
+            as …?” – tap Yes only if it's really them.
+          </p>
+          <p>
+            <b>More → Insights</b> shows what sells best (designs, colours, types), which platform brings the most orders, how many orders come from
+            returning customers, and your profit – for this week, this month, 3 months or any dates.
+          </p>
+        </Topic>
+
         <Topic title="Use your voice instead of typing">
           <p>
             Every box has a small pink <b>mic</b> button next to its name. Tap it, say <b>just that one thing</b>, and Slay fills in only that box.

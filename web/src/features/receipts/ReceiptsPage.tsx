@@ -1,4 +1,4 @@
-import { addDays, todayInBusinessTz } from '@slay/shared';
+import { addDays, localDate, todayInBusinessTz } from '@slay/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { FieldHead, MicButton } from '../../components/FieldVoice';
@@ -6,7 +6,7 @@ import { Icon } from '../../components/Icon';
 import { HeaderActions } from '../../components/Layout';
 import { Empty, MoneyInput, Sheet, Spinner, TopBar, useToast } from '../../components/ui';
 import { api, qs } from '../../lib/api';
-import { dateTime, npr } from '../../lib/format';
+import { dateTime, npr, shortDate } from '../../lib/format';
 import { uploadPhoto } from '../../lib/image';
 import type { Receipt } from '../../lib/types';
 import { useDebounced } from '../orders/OrdersPage';
@@ -115,13 +115,24 @@ export function ReceiptsPage() {
           </div>
         )}
       </main>
-      {draft && <ReceiptForm draft={draft} onClose={() => setDraft(null)} />}
+      {draft && (
+        <ReceiptForm
+          draft={draft}
+          onClose={() => setDraft(null)}
+          onSaved={(capturedAt) => {
+            // A photo from the gallery keeps its own date – if that's outside the dates shown, show all,
+            // so the bill just saved doesn't seem to vanish.
+            const from = rangeFrom(range);
+            if (from && localDate(new Date(capturedAt)) < from) setRange('all');
+          }}
+        />
+      )}
       {view && <ReceiptView r={view} onClose={() => setView(null)} />}
     </>
   );
 }
 
-function ReceiptForm({ draft, onClose }: { draft: { photo: string; captured_at: string }; onClose: () => void }) {
+function ReceiptForm({ draft, onClose, onSaved }: { draft: { photo: string; captured_at: string }; onClose: () => void; onSaved: (capturedAt: string) => void }) {
   const qc = useQueryClient();
   const toast = useToast();
   const [supplier, setSupplier] = useState('');
@@ -142,7 +153,8 @@ function ReceiptForm({ draft, onClose }: { draft: { photo: string; captured_at: 
             const type = newType !== null ? newType.trim() : category;
             await api.post('/api/receipts', { ...draft, supplier, amount: Number(amount) || 0, category: type, notes });
             qc.invalidateQueries({ queryKey: ['receipts'] });
-            toast('Bill saved');
+            toast(`Bill saved under ${shortDate(draft.captured_at)}`);
+            onSaved(draft.captured_at);
             onClose();
           } catch (err) {
             toast((err as Error).message, true);

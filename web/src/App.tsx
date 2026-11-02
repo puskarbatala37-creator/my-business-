@@ -17,6 +17,7 @@ import { BackupsPage } from './features/more/BackupsPage';
 import { GuidePage } from './features/more/GuidePage';
 import { SecurityPage } from './features/more/SecurityPage';
 import { TeamPage } from './features/more/TeamPage';
+import { InsightsPage } from './features/insights/InsightsPage';
 import { InvoicePage } from './features/orders/InvoicePage';
 import { OrderDetailPage } from './features/orders/OrderDetailPage';
 import { OrderFormPage } from './features/orders/OrderFormPage';
@@ -79,6 +80,7 @@ export function App() {
         <Route path="customers/:id" element={<CustomerPage />} />
         <Route path="receipts" element={<ReceiptsPage />} />
         <Route path="more" element={<MorePage />} />
+        <Route path="insights" element={<InsightsPage />} />
         <Route path="more/security" element={<SecurityPage />} />
         <Route path="more/team" element={<TeamPage />} />
         <Route path="more/notifications" element={<NotificationsPage />} />

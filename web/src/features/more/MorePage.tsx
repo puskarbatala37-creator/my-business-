@@ -9,6 +9,7 @@ import { useAuth } from '../../lib/auth';
 import { ConfirmPhone } from '../auth/CompleteAccountPage';
 
 const LINKS = [
+  { to: '/insights', icon: 'chart', label: 'Insights', sub: 'Best sellers, platforms, repeat customers, profit' },
   { to: '/more/guide', icon: 'orders', label: 'How to use Slay', sub: 'Orders, stock, payments and voice – in 5 minutes' },
   { to: '/receipts', icon: 'receipt', label: 'Supplier bills', sub: 'Photos of stock & material purchases' },
   { to: '/customers', icon: 'users', label: 'Customers', sub: 'Contacts and order history' },

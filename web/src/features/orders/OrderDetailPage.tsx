@@ -5,13 +5,14 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { CopySheet } from '../../components/CopySheet';
 import { Icon } from '../../components/Icon';
 import { FieldHead, MicButton } from '../../components/FieldVoice';
-import { FulfillmentBadge, Loading, MoneyInput, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar, useToast } from '../../components/ui';
+import { FulfillmentBadge, Loading, MoneyInput, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar, useToast, RepeatBadge } from '../../components/ui';
 import { api } from '../../lib/api';
 import { dateTime, longDate, npr, relativeDue, shortDate } from '../../lib/format';
 import { shareOrCopy } from '../../lib/share';
 import type { OrderDetail, OrderItem } from '../../lib/types';
 import { CancelSheet, RefundSheet, ReturnSheet } from './AfterSale';
 import { PaymentStatusSheet } from './PaymentStatusSheet';
+import { MeasurementsView } from './Measurements';
 
 interface PayRequest {
   id: number;
@@ -194,7 +195,10 @@ export function OrderDetailPage() {
 
         <section className="card stack">
           <div className="row between">
-            <h2>{o.customer.name}</h2>
+            <span className="row" style={{ gap: 8, minWidth: 0 }}>
+              <h2 className="ellipsis">{o.customer.name}</h2>
+              <RepeatBadge n={o.customer_order_no} />
+            </span>
             <Link to={`/customers/${o.customer.id}`} className="small">
               Profile
             </Link>
@@ -226,6 +230,7 @@ export function OrderDetailPage() {
                     {i.quantity} × {npr(i.unit_price)}
                   </div>
                   <LineBadge item={i} />
+                  <MeasurementsView value={i.measurements} />
                 </div>
                 <div className="right">
                   {i.returned_qty > 0 && <div className="tiny muted num" style={{ textDecoration: 'line-through' }}>{npr(i.quantity * i.unit_price)}</div>}

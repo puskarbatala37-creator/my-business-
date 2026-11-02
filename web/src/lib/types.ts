@@ -1,4 +1,4 @@
-import type { FulfillmentStatus, OrderState, PaymentMethod, PaymentStatus, Platform } from '@slay/shared';
+import type { FulfillmentStatus, Measurements, OrderState, PaymentMethod, PaymentStatus, Platform } from '@slay/shared';
 
 export interface User {
   id: number;
@@ -89,6 +89,8 @@ export interface OrderSummary {
   total: number;
   amount_paid: number;
   balance_due: number;
+  /** This order's number in its customer's history: 1 = first order, 2 = second… (cancelled ones don't count). */
+  customer_order_no?: number;
   /** Money owed back to the customer (after a return, or paid on a cancelled order). */
   refund_due: number;
   notes: string;
@@ -135,6 +137,8 @@ export interface OrderItem {
   restocked_qty: number;
   /** Set on a replacement line added by an exchange. */
   return_id: number | null;
+  /** Optional stitching measurements (bust, waist…), each its own value. */
+  measurements: Measurements | null;
 }
 
 export interface OrderReturn {
@@ -171,6 +175,7 @@ export interface HistoryRow {
   state: OrderState;
   platform: string;
   items_summary: string | null;
+  customer_order_no?: number;
 }
 
 export interface OrderDetail extends OrderSummary {

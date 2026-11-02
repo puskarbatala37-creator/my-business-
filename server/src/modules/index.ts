@@ -4,6 +4,7 @@ import { backupsModule } from './backups/index.js';
 import { catalogModule } from './catalog/index.js';
 import { customersModule } from './customers/index.js';
 import { dashboardModule } from './dashboard/index.js';
+import { insightsModule } from './insights/index.js';
 import { liveModule } from './live/index.js';
 import { messagingModule } from './messaging/index.js';
 import { ordersModule } from './orders/index.js';
@@ -30,6 +31,7 @@ export const modules: AppModule[] = [
   payModule,
   receiptsModule,
   dashboardModule,
+  insightsModule,
   voiceModule,
   uploadsModule,
   liveModule,

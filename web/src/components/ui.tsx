@@ -1,4 +1,4 @@
-import { PAYMENT_STATUS_LABELS, platformLabel, type FulfillmentStatus, type OrderState, type PaymentStatus } from '@slay/shared';
+import { PAYMENT_STATUS_LABELS, platformLabel, type FulfillmentStatus, type OrderState, type PaymentStatus, ordinal } from '@slay/shared';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode, type TouchEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { uploadPhoto } from '../lib/image';
@@ -185,6 +185,16 @@ export function Stepper({ value, onChange, min = 1, max = 999 }: { value: number
       <span>{value}</span>
       <button type="button" aria-label="More" onClick={() => onChange(Math.min(max, value + 1))}>+</button>
     </div>
+  );
+}
+
+/** "2nd order", "3rd order"… for a returning customer (nothing for a first order). */
+export function RepeatBadge({ n }: { n?: number }) {
+  if (!n || n < 2) return null;
+  return (
+    <span className="badge repeat" title={`This customer's ${ordinal(n)} order`}>
+      <Icon name="users" size={12} /> {ordinal(n)} order
+    </span>
   );
 }
 

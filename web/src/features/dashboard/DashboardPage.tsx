@@ -106,6 +106,9 @@ export function DashboardPage() {
             <div className="section">
               <div className="section-title">
                 <h2>Sales</h2>
+                <Link to="/insights" className="small">
+                  Insights
+                </Link>
               </div>
               <div className="stats">
                 <Stat label="Today" p={d.today} />

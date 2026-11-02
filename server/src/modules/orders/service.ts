@@ -9,13 +9,15 @@ import {
   type PaymentStatus,
   type Platform,
   type ReturnKind,
+  cleanMeasurements,
+  type Measurements,
 } from '@slay/shared';
 import type { AppContext, AuthUser } from '../../core/context.js';
 import { actorOf, logActivity, service } from '../../core/context.js';
 import { badRequest, conflict, notFound } from '../../core/http.js';
 import { nextCounter } from '../../db/index.js';
 import type { CatalogService } from '../catalog/service.js';
-import type { CustomerInput, CustomerService } from '../customers/service.js';
+import { CUSTOMER_ORDER_NO_SQL, type CustomerInput, type CustomerService } from '../customers/service.js';
 import type { AlertService } from '../security/service.js';
 
 export interface OrderItemInput {
@@ -27,6 +29,8 @@ export interface OrderItemInput {
   quantity: number;
   unit_price: number;
   photo?: string | null; // defaults to the variant's photo
+  /** Optional stitching measurements for this item (bust, waist…), each its own value. */
+  measurements?: Measurements | null;
 }
 
 export interface OrderInput {
@@ -147,6 +151,7 @@ export class OrderService {
       .prepare(
         `SELECT o.*, c.name AS customer_name, c.phone AS customer_phone,
                 (SELECT SUM(quantity - returned_qty) FROM order_items i WHERE i.order_id = o.id) AS item_count,
+                ${CUSTOMER_ORDER_NO_SQL} AS customer_order_no,
                 (SELECT photo FROM order_items i WHERE i.order_id = o.id AND photo IS NOT NULL ORDER BY i.id LIMIT 1) AS thumb,
                 (SELECT GROUP_CONCAT(i.product_name || ' · ' || i.color, ', ') FROM order_items i WHERE i.order_id = o.id) AS items_summary,
                 (SELECT GROUP_CONCAT(DISTINCT i.category_name) FROM order_items i WHERE i.order_id = o.id AND i.category_name <> '') AS categories
@@ -170,7 +175,8 @@ export class OrderService {
   get(id: number) {
     const order = this.db
       .prepare(
-        `SELECT o.*, u.display_name AS created_by_name FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ?`,
+        `SELECT o.*, u.display_name AS created_by_name, ${CUSTOMER_ORDER_NO_SQL} AS customer_order_no
+           FROM orders o LEFT JOIN users u ON u.id = o.created_by WHERE o.id = ?`,
       )
       .get(id) as any;
     if (!order) throw notFound('Order not found');
@@ -180,7 +186,12 @@ export class OrderService {
           WHERE i.order_id = ? ORDER BY i.id`,
       )
       .all(id)
-      .map((i: any) => ({ ...i, sizes: i.unit_sizes ? (JSON.parse(i.unit_sizes) as string[]) : null, unit_sizes: undefined }));
+      .map((i: any) => ({
+        ...i,
+        sizes: i.unit_sizes ? (JSON.parse(i.unit_sizes) as string[]) : null,
+        unit_sizes: undefined,
+        measurements: i.measurements ? (JSON.parse(i.measurements) as Measurements) : null,
+      }));
     const payments = this.db
       .prepare(`SELECT p.*, u.display_name AS created_by_name FROM payments p LEFT JOIN users u ON u.id = p.created_by WHERE p.order_id = ? ORDER BY p.id`)
       .all(id);
@@ -307,8 +318,8 @@ export class OrderService {
         if (diff < 0) this.catalog.give(item.variant_id, -diff, 'order_edit', user.id, id, old.id);
         if (diff !== 0) variantIds.add(item.variant_id);
         this.db
-          .prepare('UPDATE order_items SET size = ?, unit_sizes = ?, quantity = ?, unit_price = ?, photo = COALESCE(?, photo) WHERE id = ?')
-          .run(...lineSizes(item), item.quantity, money(item.unit_price), item.photo ?? null, old.id);
+          .prepare('UPDATE order_items SET size = ?, unit_sizes = ?, quantity = ?, unit_price = ?, photo = COALESCE(?, photo), measurements = ? WHERE id = ?')
+          .run(...lineSizes(item), item.quantity, money(item.unit_price), item.photo ?? null, measurementsJson(item), old.id);
       }
 
       const fulfillment = input.fulfillment_status ?? current.fulfillment_status;
@@ -601,10 +612,10 @@ export class OrderService {
     const v = this.catalog.getVariant(item.variant_id);
     const row = this.db
       .prepare(
-        `INSERT INTO order_items (order_id, variant_id, product_name, category_name, color, size, unit_sizes, quantity, unit_price, unit_cost, photo, return_id)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        `INSERT INTO order_items (order_id, variant_id, product_name, category_name, color, size, unit_sizes, quantity, unit_price, unit_cost, photo, return_id, measurements)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       )
-      .get(orderId, v.id, v.product_name, v.category_name, v.color, ...lineSizes(item), item.quantity, money(item.unit_price), v.cost, item.photo || v.photo, opts.returnId ?? null) as { id: number };
+      .get(orderId, v.id, v.product_name, v.category_name, v.color, ...lineSizes(item), item.quantity, money(item.unit_price), v.cost, item.photo || v.photo, opts.returnId ?? null, measurementsJson(item)) as { id: number };
     this.catalog.take(v.id, item.quantity, opts.reason ?? 'order', userId, orderId, row.id);
     return v.id;
   }
@@ -646,6 +657,12 @@ function withBalance<T extends { total: number; amount_paid: number; state?: str
     balance_due: o.state === 'cancelled' ? 0 : Math.max(0, money(o.total - o.amount_paid)),
     refund_due: Math.max(0, money(o.amount_paid - worth)),
   };
+}
+
+/** The item's measurements as stored: only the filled-in ones, or NULL. */
+function measurementsJson(item: OrderItemInput): string | null {
+  const m = cleanMeasurements(item.measurements);
+  return m ? JSON.stringify(m) : null;
 }
 
 /**

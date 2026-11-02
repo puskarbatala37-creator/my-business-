@@ -1,4 +1,4 @@
-import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, platformLabel } from '@slay/shared';
+import { PAYMENT_METHOD_LABELS, PAYMENT_STATUS_LABELS, platformLabel, measurementSummary } from '@slay/shared';
 import { WORDMARK } from '../components/BrandMark';
 import { longDate, npr } from './format';
 import type { OrderDetail } from './types';
@@ -121,6 +121,15 @@ function draw(ctx: Ctx, o: OrderDetail): number {
       for (const l of wrap(ctx, `${i.sizes ? 'Sizes' : 'Size'} ${i.size}`, col.qty - M - 110)) {
         rowY += 32;
         text(l, M + 18, rowY, 22, { color: C.muted });
+      }
+    }
+    // Stitching measurements, large enough for the tailor to read.
+    const meas = measurementSummary(i.measurements, '   ');
+    if (meas) {
+      font(ctx, 24, 600);
+      for (const l of wrap(ctx, meas, W - 2 * M - 36)) {
+        rowY += 34;
+        text(l, M + 18, rowY, 24, { weight: 600 });
       }
     }
     y = rowY + 26;

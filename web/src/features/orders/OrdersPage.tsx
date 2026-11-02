@@ -5,7 +5,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { HeaderActions } from '../../components/Layout';
 import { useCatalog } from '../../components/VariantPicker';
-import { Empty, FulfillmentBadge, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar } from '../../components/ui';
+import { Empty, FulfillmentBadge, PaymentBadge, PlatformBadge, Sheet, Spinner, Thumb, TopBar, RepeatBadge } from '../../components/ui';
 import { api, qs } from '../../lib/api';
 import { dueTone, npr, relativeDue, shortDate } from '../../lib/format';
 import { datePresets } from '../../lib/periods';
@@ -44,7 +44,10 @@ export function OrderRow({ o }: { o: OrderSummary }) {
       <Thumb src={o.thumb} caption={o.items_summary ?? o.customer_name ?? ''} />
       <div className="grow">
         <div className="row between">
-          <span className="strong ellipsis">{o.customer_name}</span>
+          <span className="row ellipsis" style={{ gap: 6, minWidth: 0 }}>
+            <span className="strong ellipsis">{o.customer_name}</span>
+            <RepeatBadge n={o.customer_order_no} />
+          </span>
           <span className="strong num nowrap">{npr(o.total)}</span>
         </div>
         <div className="small muted ellipsis">{o.items_summary}</div>

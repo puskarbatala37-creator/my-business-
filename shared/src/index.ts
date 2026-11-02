@@ -58,6 +58,40 @@ export function sizeSummary(sizes: readonly string[]): string {
   return [...counts].map(([s, n]) => (n > 1 ? `${s} ×${n}` : s)).join(', ');
 }
 
+/**
+ * Optional stitching measurements for an order item. Each one is its own field; values are free
+ * text (e.g. "34", "34.5"), so they're never locked to preset sizes. Sizes (S, M, 42…) stay as they are.
+ */
+export const MEASUREMENTS = [
+  { key: 'bust', label: 'Bust size' },
+  { key: 'waist', label: 'Waist size' },
+  { key: 'hip', label: 'Hip size' },
+  { key: 'pant_length', label: 'Pant length' },
+  { key: 'underarm', label: 'Underarm round' },
+  { key: 'chest', label: 'Chest size' },
+  { key: 'neck', label: 'Neck size' },
+] as const;
+export type MeasurementKey = (typeof MEASUREMENTS)[number]['key'];
+export type Measurements = Partial<Record<MeasurementKey, string>>;
+
+/** Only the measurements that have a value, in the standard order; null when there are none. */
+export function cleanMeasurements(m: Measurements | null | undefined): Measurements | null {
+  if (!m) return null;
+  const out: Measurements = {};
+  for (const { key } of MEASUREMENTS) {
+    const v = m[key]?.trim();
+    if (v) out[key] = v;
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+/** "Bust 34 · Waist 28" – for invoices and messages. */
+export function measurementSummary(m: Measurements | null | undefined, sep = ' · '): string {
+  const c = cleanMeasurements(m);
+  if (!c) return '';
+  return MEASUREMENTS.filter(({ key }) => c[key]).map(({ key, label }) => `${label.replace(/ size$/, '')} ${c[key]}`).join(sep);
+}
+
 /** What a supplier bill was for. Teams can add their own types on top of these. */
 export const RECEIPT_TYPE_PRESETS = ['Fabric', 'Stitching', 'Ready-made', 'Thread'] as const;
 
@@ -78,6 +112,13 @@ export const STOCK_REASONS = ['order', 'order_edit', 'order_cancel', 'manual', '
 export type StockReason = (typeof STOCK_REASONS)[number];
 
 export const BUSINESS_TIMEZONE = 'Asia/Kathmandu';
+
+/** 1 → "1st", 2 → "2nd", 3 → "3rd", 11 → "11th", 22 → "22nd". */
+export function ordinal(n: number): string {
+  const tens = n % 100;
+  const suffix = tens >= 11 && tens <= 13 ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' } as Record<number, string>)[n % 10] ?? 'th';
+  return `${n}${suffix}`;
+}
 
 /** Round to 2 decimals (rupees + paisa) to avoid floating point drift. */
 export function money(n: number): number {

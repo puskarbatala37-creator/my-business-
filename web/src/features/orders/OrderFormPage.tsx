@@ -9,12 +9,17 @@ import {
   type PaymentMethod,
   type PaymentStatus,
   type Platform,
+  ordinal,
+  cleanMeasurements,
+  type Measurements,
 } from '@slay/shared';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { Icon } from '../../components/Icon';
 import { useVariantIndex, VariantPicker, type PickedVariant } from '../../components/VariantPicker';
+import { useDebounced } from './OrdersPage';
+import { MeasurementsEditor } from './Measurements';
 import { FieldHead, MicButton } from '../../components/FieldVoice';
 import { MoneyInput, PaymentBadge, PhotoInput, Seg, Spinner, Stepper, TopBar, useToast } from '../../components/ui';
 import { api, ApiError } from '../../lib/api';
@@ -33,6 +38,8 @@ interface Line {
   photo: string | null;
   /** Units of this variant this line already holds (edit mode) – they count as available. */
   reserved: number;
+  /** Optional stitching measurements for this item. */
+  measurements: Measurements | null;
 }
 
 interface FormState {
@@ -52,6 +59,14 @@ interface FormState {
 }
 
 const newKey = () => Math.random().toString(36).slice(2);
+
+interface SimilarCustomer {
+  id: number;
+  name: string;
+  phone: string | null;
+  order_count: number;
+  last_order_date: string | null;
+}
 
 function emptyForm(): FormState {
   return {
@@ -75,7 +90,7 @@ function fromOrder(o: OrderDetail): FormState {
     // Older orders may hold a source that is no longer offered – ask again when editing.
     platform: (PLATFORMS as readonly string[]).includes(o.platform) ? (o.platform as Platform) : '',
     order_date: o.order_date,
-    items: o.items.map((i) => ({ key: newKey(), id: i.id, variant_id: i.variant_id, size: i.sizes ? '' : i.size, sizes: i.sizes, quantity: i.quantity, unit_price: i.unit_price, photo: i.photo, reserved: i.quantity })),
+    items: o.items.map((i) => ({ key: newKey(), id: i.id, variant_id: i.variant_id, size: i.sizes ? '' : i.size, sizes: i.sizes, quantity: i.quantity, unit_price: i.unit_price, photo: i.photo, reserved: i.quantity, measurements: i.measurements ?? null })),
     delivery_charge: o.delivery_charge || '',
     discount: o.discount || '',
     delivery_due_date: o.delivery_due_date ?? '',
@@ -132,12 +147,24 @@ export function OrderFormPage() {
   };
 
   // Returning customer lookup by phone → previous orders.
-  const phoneDigits = form.customer.phone.replace(/\D/g, '').replace(/^977/, '');
+  // The server reads the number however it's written ("+977 984-…", "00977…", "984 123 4567").
+  const phoneTyped = form.customer.phone.trim();
+  const phoneDigits = phoneTyped.replace(/\D/g, '');
   const lookup = useQuery({
-    queryKey: ['customer-lookup', phoneDigits],
-    queryFn: () => api.get<{ customer: Customer | null; orders: HistoryRow[] }>(`/api/customers/lookup?phone=${phoneDigits}`),
+    queryKey: ['customer-lookup', phoneTyped],
+    queryFn: () => api.get<{ customer: Customer | null; orders: HistoryRow[] }>(`/api/customers/lookup?phone=${encodeURIComponent(phoneTyped)}`),
     enabled: phoneDigits.length >= 9,
   });
+  // No phone match: maybe the same person with another number – names are spelled many ways,
+  // so this is only offered as a hint ("Same person as Seeta Sharma?"), never matched automatically.
+  const nameTyped = useDebounced(form.customer.name.trim(), 400);
+  const similar = useQuery({
+    queryKey: ['customer-similar', nameTyped],
+    queryFn: () => api.get<{ customers: SimilarCustomer[] }>(`/api/customers/similar?name=${encodeURIComponent(nameTyped)}`),
+    enabled: !editing && !form.customer.id && nameTyped.length >= 3 && !lookup.data?.customer,
+  });
+  const [notSame, setNotSame] = useState<number[]>([]);
+  const nameHints = !editing && !form.customer.id && !lookup.data?.customer ? (similar.data?.customers ?? []).filter((c) => !notSame.includes(c.id)) : [];
   useEffect(() => {
     const c = lookup.data?.customer;
     if (c && !form.customer.id) {
@@ -159,7 +186,7 @@ export function OrderFormPage() {
     } else {
       setForm((f) => ({
         ...f,
-        items: [...f.items, { key: newKey(), variant_id: p.variant.id, size: sizes.length === 1 ? sizes[0] : '', sizes: null, quantity: 1, unit_price: p.variant.price, photo: p.variant.photo, reserved: 0 }],
+        items: [...f.items, { key: newKey(), variant_id: p.variant.id, size: sizes.length === 1 ? sizes[0] : '', sizes: null, quantity: 1, unit_price: p.variant.price, photo: p.variant.photo, reserved: 0, measurements: null }],
       }));
     }
     setPicker(null);
@@ -194,7 +221,7 @@ export function OrderFormPage() {
       tracking_number: form.tracking_number,
       notes: form.notes,
       payment_method: form.payment.status === 'unpaid' ? null : form.payment.method,
-      items: form.items.map((l) => ({ id: l.id ?? null, variant_id: l.variant_id, size: l.size, sizes: l.sizes, quantity: l.quantity, unit_price: Number(l.unit_price), photo: l.photo })),
+      items: form.items.map((l) => ({ id: l.id ?? null, variant_id: l.variant_id, size: l.size, sizes: l.sizes, quantity: l.quantity, unit_price: Number(l.unit_price), photo: l.photo, measurements: cleanMeasurements(l.measurements) })),
     };
     try {
       let saved = editing
@@ -229,6 +256,7 @@ export function OrderFormPage() {
 
   if (editing && (!loaded || catalogLoading)) return <Spinner />;
   const prevOrders = (lookup.data?.orders ?? []).filter((o) => o.id !== Number(id));
+  const prevActive = prevOrders.filter((o) => o.state !== 'cancelled').length;
 
   return (
     <>
@@ -281,6 +309,7 @@ export function OrderFormPage() {
               <div className="row between small">
                 <span>
                   Returning customer · <strong>{prevOrders.length}</strong> previous order{prevOrders.length === 1 ? '' : 's'}
+                  {!editing && prevActive > 0 && <> · this is their <strong>{ordinal(prevActive + 1)}</strong> order</>}
                 </span>
                 <Link to={`/customers/${lookup.data.customer.id}`} className="small">
                   History
@@ -302,6 +331,37 @@ export function OrderFormPage() {
             </FieldHead>
             <input className="input" autoComplete="off" value={form.customer.name} onChange={(e) => setCustomer({ name: e.target.value })} />
           </label>
+          {nameHints.map((c) => (
+            <div key={c.id} className="card tight" style={{ background: 'var(--surface-2)' }} role="group" aria-label={`Possible returning customer ${c.name}`}>
+              <div className="small">
+                Same person as <strong>{c.name}</strong>
+                {c.phone ? <span className="num"> · {c.phone}</span> : null} · {c.order_count} order{c.order_count === 1 ? '' : 's'}
+                {c.last_order_date ? `, last ${shortDate(c.last_order_date)}` : ''}?
+              </div>
+              <div className="row" style={{ gap: 8, marginTop: 6 }}>
+                <button
+                  type="button"
+                  className="btn sm primary"
+                  onClick={() =>
+                    setForm((f) => ({
+                      ...f,
+                      customer: { ...f.customer, id: c.id, name: c.name, phone: f.customer.phone.trim() || c.phone || '' },
+                    }))
+                  }
+                >
+                  Yes, same customer
+                </button>
+                <button type="button" className="btn sm" onClick={() => setNotSame((n) => [...n, c.id])}>
+                  No, someone else
+                </button>
+              </div>
+              {form.customer.phone.trim() && c.phone && form.customer.phone.replace(/\D/g, '').slice(-10) !== c.phone.replace(/\D/g, '').slice(-10) && (
+                <div className="tiny muted" style={{ marginTop: 4 }}>
+                  Choosing “Yes” saves {form.customer.phone.trim()} as their phone number.
+                </div>
+              )}
+            </div>
+          ))}
           <label className="field">
             <FieldHead text="Delivery address">
               <MicButton label="Delivery address" kind="text" onValue={(v) => setCustomer({ address: v })} />
@@ -412,6 +472,7 @@ export function OrderFormPage() {
                     ))}
                   </div>
                 )}
+                <MeasurementsEditor value={l.measurements} onChange={(m) => setLine(l.key, { measurements: m })} itemName={v ? `${v.product.name} ${v.variant.color}` : 'this item'} />
                 {l.quantity > 1 && (
                   <button
                     type="button"

@@ -1,4 +1,4 @@
-import { PAYMENT_STATUS_LABELS, platformLabel } from '@slay/shared';
+import { cleanMeasurements, MEASUREMENTS, measurementSummary, PAYMENT_STATUS_LABELS, platformLabel } from '@slay/shared';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
@@ -20,7 +20,10 @@ export function invoiceText(o: OrderDetail) {
     `Ordered via: ${platformLabel(o.platform)}`,
     `Customer: ${o.customer.name}${o.customer.phone ? ' (' + o.customer.phone + ')' : ''}`,
     '',
-    ...invoiceItems(o).map((i) => `• ${i.product_name} – ${i.color}${i.size ? (i.sizes ? ', sizes ' : ', size ') + i.size : ''}: ${i.quantity} × ${npr(i.unit_price)} = ${npr(i.quantity * i.unit_price)}`),
+    ...invoiceItems(o).flatMap((i) => [
+      `• ${i.product_name} – ${i.color}${i.size ? (i.sizes ? ', sizes ' : ', size ') + i.size : ''}: ${i.quantity} × ${npr(i.unit_price)} = ${npr(i.quantity * i.unit_price)}`,
+      ...(measurementSummary(i.measurements) ? [`   Measurements: ${measurementSummary(i.measurements, ', ')}`] : []),
+    ]),
     '',
     o.delivery_charge ? `Delivery: ${npr(o.delivery_charge)}` : '',
     o.discount ? `Discount: −${npr(o.discount)}` : '',
@@ -172,6 +175,15 @@ export function InvoicePage() {
                   <td>
                     {i.product_name} – {i.color}
                     {i.size && <div style={{ fontSize: 12, color: '#666' }}>{i.sizes ? 'Sizes' : 'Size'} {i.size}</div>}
+                    {cleanMeasurements(i.measurements) && (
+                      <div className="inv-meas">
+                        {MEASUREMENTS.filter(({ key }) => i.measurements?.[key]?.trim()).map(({ key, label }) => (
+                          <span key={key}>
+                            {label.replace(/ size$/, '')} <b>{i.measurements![key]!.trim()}</b>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="r">{i.quantity}</td>
                   <td className="r">{npr(i.unit_price)}</td>

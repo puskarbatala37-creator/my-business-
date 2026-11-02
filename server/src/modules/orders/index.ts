@@ -1,4 +1,4 @@
-import { FULFILLMENT_STATUSES, PAYMENT_METHODS, PAYMENT_STATUSES, PLATFORMS, RETURN_KINDS } from '@slay/shared';
+import { FULFILLMENT_STATUSES, MEASUREMENTS, PAYMENT_METHODS, PAYMENT_STATUSES, PLATFORMS, RETURN_KINDS } from '@slay/shared';
 import { Router } from 'express';
 import { z } from 'zod';
 import type { AppModule } from '../../core/context.js';
@@ -17,6 +17,11 @@ const zItem = z
     quantity: z.coerce.number().int().min(1).max(1000),
     unit_price: zMoney,
     photo: z.string().max(300).nullable().optional(),
+    /** Optional measurements – each its own short value ("34", "34.5"); unknown names are refused. */
+    measurements: z
+      .strictObject(Object.fromEntries(MEASUREMENTS.map((m) => [m.key, zText(30).optional()])) as Record<(typeof MEASUREMENTS)[number]['key'], z.ZodOptional<z.ZodString>>)
+      .nullable()
+      .optional(),
   })
   .refine((i) => !i.sizes || i.sizes.length === i.quantity, { message: 'give one size for each piece', path: ['sizes'] });
 
