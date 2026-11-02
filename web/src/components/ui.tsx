@@ -202,9 +202,33 @@ export function RepeatBadge({ n }: { n?: number }) {
  * A small photo. With `caption` (e.g. "Cotton Kurta – Maroon") and a photo, tapping it opens the photo
  * full screen – without also opening the row it sits in.
  */
+/**
+ * A photo, or a plain picture icon when the file isn't on the server (e.g. after restoring a backup –
+ * photos aren't inside backup files) instead of a broken-image symbol.
+ */
+export function SafeImg({ src, alt = '', iconSize = 20, onMissing }: { src: string; alt?: string; iconSize?: number; onMissing?: () => void }) {
+  const [missing, setMissing] = useState(false);
+  useEffect(() => setMissing(false), [src]);
+  if (missing) return <Icon name="image" size={iconSize} />;
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading="lazy"
+      onError={() => {
+        setMissing(true);
+        onMissing?.();
+      }}
+    />
+  );
+}
+
 export function Thumb({ src, size = 'md', caption }: { src?: string | null; size?: 'md' | 'lg'; caption?: string }) {
   const cls = `thumb ${size === 'lg' ? 'lg' : ''}`;
-  if (!src || caption === undefined) return <div className={cls}>{src ? <img src={src} alt="" loading="lazy" /> : <Icon name="image" size={20} />}</div>;
+  const [missing, setMissing] = useState(false);
+  useEffect(() => setMissing(false), [src]);
+  if (!src || caption === undefined || missing)
+    return <div className={cls}>{src ? <SafeImg src={src} onMissing={() => setMissing(true)} /> : <Icon name="image" size={20} />}</div>;
   const open = (e: { preventDefault(): void; stopPropagation(): void }) => {
     e.preventDefault(); // not the link / row around it
     e.stopPropagation();
@@ -287,7 +311,7 @@ export function PhotoInput({
         {busy ? (
           <div className="spinner" style={{ margin: 0 }} />
         ) : value ? (
-          <img src={value} alt="" />
+          <SafeImg src={value} />
         ) : (
           <div className="center small">
             <Icon name="camera" />

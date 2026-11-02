@@ -5,7 +5,7 @@ import { npr } from '../lib/format';
 import type { Category, Product, Variant } from '../lib/types';
 import { Icon } from './Icon';
 import { openPhoto } from './PhotoViewer';
-import { Empty, Sheet, Spinner } from './ui';
+import { Empty, SafeImg, Sheet, Spinner, useToast } from './ui';
 
 export interface PickedVariant {
   variant: Variant;
@@ -48,6 +48,7 @@ export function VariantPicker({
   reserved?: Record<number, number>;
 }) {
   const { data, isLoading } = useCatalog();
+  const toast = useToast();
   const [search, setSearch] = useState('');
   const [cat, setCat] = useState<number | 'all'>('all');
   const s = search.trim().toLowerCase();
@@ -104,12 +105,20 @@ export function VariantPicker({
                     key={v.id}
                     type="button"
                     className={`variant-tile ${out ? 'out' : ''}`}
-                    disabled={out}
+                    aria-disabled={out || undefined}
                     aria-label={`${v.color} – ${out ? 'out of stock' : `${available} left, ${npr(v.price)}`}`}
-                    onClick={() => onPick({ variant: v, product: g.product, category: g.category })}
+                    onClick={() => {
+                      // Out of stock: say so, instead of a tap that seems to do nothing.
+                      if (out) return toast(`${g.product.name} – ${v.color} is out of stock. Add stock under Stock first (tap the colour → +1).`, true);
+                      try {
+                        onPick({ variant: v, product: g.product, category: g.category });
+                      } catch (e) {
+                        toast(`Couldn’t add ${g.product.name} – ${v.color}: ${(e as Error).message}`, true);
+                      }
+                    }}
                   >
                     <div className="ph">
-                      {v.photo ? <img src={v.photo} alt="" loading="lazy" /> : <Icon name="image" />}
+                      {v.photo ? <SafeImg src={v.photo} iconSize={24} /> : <Icon name="image" />}
                       {v.photo && (
                         // Tapping the tile picks the colour; this small button only shows the photo large.
                         <span

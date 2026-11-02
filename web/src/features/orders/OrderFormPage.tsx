@@ -180,7 +180,7 @@ export function OrderFormPage() {
   const paidNow = form.payment.status === 'paid' ? total : form.payment.status === 'partial' ? Number(form.payment.amount) || 0 : 0;
 
   function addPicked(p: PickedVariant, lineKey?: string) {
-    const sizes = p.product.sizes.split(',').map((s) => s.trim()).filter(Boolean);
+    const sizes = (p.product.sizes ?? '').split(',').map((s) => s.trim()).filter(Boolean);
     if (lineKey) {
       setLine(lineKey, { variant_id: p.variant.id, photo: p.variant.photo, unit_price: form.items.find((l) => l.key === lineKey)?.unit_price || p.variant.price });
     } else {
@@ -385,7 +385,7 @@ export function OrderFormPage() {
           {form.items.map((l) => {
             const v = l.variant_id ? index.get(l.variant_id) : undefined;
             const available = v ? v.variant.stock + l.reserved : 0;
-            const sizes = v?.product.sizes.split(',').map((s) => s.trim()).filter(Boolean) ?? [];
+            const sizes = (v?.product.sizes ?? '').split(',').map((s) => s.trim()).filter(Boolean);
             return (
               <div key={l.key} className="card tight stack" style={{ gap: 10 }}>
                 <div className="row" style={{ alignItems: 'flex-start' }}>

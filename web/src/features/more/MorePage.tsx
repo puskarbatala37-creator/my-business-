@@ -108,6 +108,9 @@ export function MorePage() {
             <Icon name="logout" /> <span className="strong">Sign out</span>
           </button>
         </div>
+        <div className="tiny muted center" style={{ marginTop: 8 }}>
+          Slay app version: {import.meta.env.VITE_BUILT ? new Date(import.meta.env.VITE_BUILT).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : 'development'}
+        </div>
       </main>
       {pw && <PasswordSheet onClose={() => setPw(false)} />}
       {(editing === 'email' || editing === 'phone') && user && (

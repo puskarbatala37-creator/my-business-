@@ -52,6 +52,8 @@ export default defineConfig(({ mode }) => {
     // A build-time constant, so the regular app build drops all demo-only code.
     define: {
       'import.meta.env.VITE_DEMO': JSON.stringify(demo ? '1' : '0'),
+      // When this copy of the app was built – shown under More, to tell which version a phone is running.
+      'import.meta.env.VITE_BUILT': JSON.stringify(new Date().toISOString()),
       ...(demo ? { 'process.env.NODE_ENV': JSON.stringify('production') } : {}),
     },
     resolve: {
