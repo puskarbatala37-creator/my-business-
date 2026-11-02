@@ -71,6 +71,18 @@ export function installedBefore() {
   }
 }
 
+// ── "New version available" ──
+let updateReady = false;
+const updateSubs = new Set<() => void>();
+/** True once a newer version of Slay has taken over while this screen was still the old one. */
+export const updateAvailable = () => updateReady;
+export function onUpdateAvailable(fn: () => void) {
+  updateSubs.add(fn);
+  return () => void updateSubs.delete(fn);
+}
+/** Load the new version now. */
+export const applyUpdate = () => location.reload();
+
 /** Fades out the launch screen once the first real screen is ready. */
 export function hideSplash() {
   const el = document.getElementById('splash');
@@ -107,12 +119,14 @@ export function initPwa({ serviceWorker }: { serviceWorker: boolean }) {
   document.addEventListener('gesturestart', (e) => e.preventDefault());
 
   if (serviceWorker && 'serviceWorker' in navigator) {
-    // When a new version is installed in the background, switch to it the next time the app
-    // is out of sight – never in the middle of taking an order.
+    // A new version of Slay is downloaded in the background. When it takes over while the app is
+    // open, say so ("New version available – tap to update") – only then, never on a first install
+    // or an ordinary open. If nobody taps, it switches over the next time the app is out of sight.
     const hadController = !!navigator.serviceWorker.controller;
-    let updateReady = false;
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hadController) updateReady = true;
+      if (!hadController || updateReady) return;
+      updateReady = true;
+      updateSubs.forEach((f) => f());
     });
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden' && updateReady) location.reload();
@@ -121,8 +135,10 @@ export function initPwa({ serviceWorker }: { serviceWorker: boolean }) {
       navigator.serviceWorker
         .register('/sw.js')
         .then((reg) => {
-          // Installed apps can stay open for days: look for updates when brought back.
-          document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && reg.update().catch(() => {}));
+          const check = () => reg.update().catch(() => {});
+          // Installed apps can stay open for days: look for a new version when brought back, and every 30 minutes.
+          document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && check());
+          setInterval(check, 30 * 60 * 1000);
         })
         .catch(() => {});
     });

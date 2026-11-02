@@ -13,10 +13,11 @@ import { restoreIfRequested } from './modules/backups/service.js';
 import { serveUploads } from './modules/uploads/index.js';
 
 /** A backup waiting in DATA_DIR/restore is swapped in before the database is opened. */
+let restoredFrom: string | null = null;
 function restoreFirst(config: Config) {
   if (config.dbFile === ':memory:') return config.dbFile;
-  const restored = restoreIfRequested(config.dataDir, config.dbFile);
-  if (restored) console.log(`[backups] Restored data from ${restored}. The data it replaced is in ${config.dataDir}/backups.`);
+  restoredFrom = restoreIfRequested(config.dataDir, config.dbFile);
+  if (restoredFrom) console.log(`[backups] Restored data from ${restoredFrom}. The data it replaced is in ${config.dataDir}/backups.`);
   return config.dbFile;
 }
 
@@ -29,6 +30,15 @@ export function createApp(config: Config, opts: { db?: DB; modules?: AppModule[]
   };
   const modules = opts.modules ?? defaultModules;
   for (const m of modules) m.init?.(ctx);
+  if (restoredFrom && ctx.services.alerts) {
+    // Written into the restored data, so the team sees it after signing in again.
+    (ctx.services.alerts as { raise: (k: string, s: 'warning', m: string) => unknown }).raise(
+      'data_restored',
+      'warning',
+      `Slay's data was restored from a backup (${restoredFrom}). The data it replaced was kept on the server as a before-restore copy.`,
+    );
+    restoredFrom = null;
+  }
 
   const app = express();
   app.disable('x-powered-by');

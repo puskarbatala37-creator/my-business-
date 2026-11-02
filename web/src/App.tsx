@@ -1,3 +1,4 @@
+import { UpdateBanner } from './components/UpdateBanner';
 import { PhotoViewer } from './components/PhotoViewer';
 import { useFriendlyFormChecks } from './lib/formCheck';
 import { useEffect } from 'react';
@@ -55,6 +56,7 @@ export function App() {
     return (
       <>
         <OfflineBar floating />
+        <UpdateBanner />
         <LoginPage />
         <InstallPrompt />
       </>
@@ -65,6 +67,7 @@ export function App() {
     <>
     <InstallPrompt />
     <PhotoViewer />
+    <UpdateBanner />
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<DashboardPage />} />

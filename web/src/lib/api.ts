@@ -10,6 +10,7 @@ export class ApiError extends Error {
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const isForm = body instanceof FormData;
+  const isFile = body instanceof Blob; // a raw file, e.g. a backup to restore
   let res: Response;
   try {
     res = await fetch(url, {
@@ -17,9 +18,9 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
       credentials: 'same-origin',
       headers: {
         ...(method !== 'GET' ? { 'x-slay': '1' } : {}),
-        ...(body !== undefined && !isForm ? { 'Content-Type': 'application/json' } : {}),
+        ...(isFile ? { 'Content-Type': 'application/octet-stream' } : body !== undefined && !isForm ? { 'Content-Type': 'application/json' } : {}),
       },
-      body: body === undefined ? undefined : isForm ? body : JSON.stringify(body),
+      body: body === undefined ? undefined : isForm || isFile ? (body as BodyInit) : JSON.stringify(body),
     });
   } catch {
     // No connection (or the server can't be reached).

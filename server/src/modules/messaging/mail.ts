@@ -13,8 +13,8 @@ export class MailService {
     return !!this.transport;
   }
 
-  async send(to: string[], subject: string, text: string) {
+  async send(to: string[], subject: string, text: string, attachments?: { filename: string; content: Buffer; contentType?: string }[]) {
     if (!this.transport || !to.length) return;
-    await this.transport.sendMail({ from: this.cfg.from, bcc: to, subject, text });
+    await this.transport.sendMail({ from: this.cfg.from, bcc: to, subject, text, attachments });
   }
 }

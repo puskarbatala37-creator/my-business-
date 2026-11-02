@@ -7,6 +7,11 @@ import type { AuthService } from './modules/auth/service.js';
 const config = loadConfig();
 const { app, ctx, start } = createApp(config);
 const setupCode = service<AuthService>(ctx, 'auth').setupCode;
+// A restore from the app finishes on a fresh start: exit, and the host (Render, Docker) starts Slay again.
+ctx.services.restartProcess = () => {
+  console.log('[backups] Restarting to finish the restore – this is expected.');
+  process.exit(1);
+};
 
 app.listen(config.port, () => {
   start();

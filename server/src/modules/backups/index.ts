@@ -1,6 +1,9 @@
-import { Router } from 'express';
+import express, { Router } from 'express';
+import { z } from 'zod';
+import type { MailService } from '../messaging/mail.js';
 import type { AppModule } from '../../core/context.js';
 import { logActivity, service } from '../../core/context.js';
+import { HttpError, parse } from '../../core/http.js';
 import { requireOwner } from '../auth/index.js';
 import type { AlertService } from '../security/service.js';
 import { BackupService, KEEP_DAYS } from './service.js';
@@ -18,7 +21,12 @@ export const backupsModule: AppModule = {
     r.get('/', (_req, res) => {
       const last = backups().lastDownload();
       const by = last ? (ctx.db.prepare('SELECT display_name FROM users WHERE id = ?').get(last.by) as { display_name: string } | undefined) : undefined;
-      res.json({ keepDays: KEEP_DAYS, backups: backups().list(), lastDownload: last ? { at: last.at, by: by?.display_name ?? '' } : null });
+      res.json({
+        keepDays: KEEP_DAYS,
+        backups: backups().list(),
+        lastDownload: last ? { at: last.at, by: by?.display_name ?? '' } : null,
+        email: { configured: !!(ctx.services.mail as MailService | undefined)?.configured, last: backups().lastEmail() },
+      });
     });
     r.get('/download', async (req, res) => {
       const data = await backups().forDownload(req.user!.id);
@@ -30,6 +38,24 @@ export const backupsModule: AppModule = {
       res.setHeader('Content-Disposition', `attachment; filename="slay-backup-${stamp}.db.gz"`);
       res.setHeader('Cache-Control', 'no-store');
       res.end(data);
+    });
+
+    // Restore, step 1: check the chosen backup file and say what's inside. Changes nothing.
+    r.post('/restore/check', express.raw({ type: () => true, limit: '200mb' }), (req, res) => {
+      const body = req.body as Buffer;
+      if (!Buffer.isBuffer(body) || !body.length) throw new HttpError(400, 'Choose a backup file first.');
+      res.json(backups().checkRestore(body));
+    });
+
+    // Restore, step 2 (after the owner confirms): swap the backup in on a restart.
+    r.post('/restore/apply', (req, res) => {
+      const b = parse(z.object({ token: z.string() }), req.body);
+      backups().applyRestore(b.token);
+      logActivity(ctx, req.user!.id, 'restore_requested', 'backup', null, {});
+      const restart = ctx.services.restartProcess as (() => void) | undefined;
+      res.json({ restarting: !!restart });
+      // Let the reply reach the phone first; the host starts Slay again straight away.
+      if (restart) setTimeout(restart, 300);
     });
     return r;
   },
