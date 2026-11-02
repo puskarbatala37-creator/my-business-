@@ -9,10 +9,14 @@ import { clearSavedQueries } from '../../lib/persist';
 
 export interface BackupInfo {
   keepDays: number;
-  backups: { name: string; day: string; size: number; createdAt: string }[];
+  backups: { name: string; day: string; size: number; createdAt: string; photos: number | null }[];
   lastDownload: { at: string; by: string } | null;
-  email: { configured: boolean; last: { day: string; at: string; ok: boolean; to?: string[]; error?: string } | null };
+  email: { configured: boolean; last: { day: string; at: string; ok: boolean; to?: string[]; error?: string; photos?: boolean } | null };
+  disk: { total: number | null; free: number | null; usedPct: number | null; photos: number; backups: number; database: number; warn: boolean };
 }
+
+/** "340 MB", "1.0 GB". */
+export const bytes = (n: number) => (n >= 1e9 ? `${(n / 1e9).toFixed(1)} GB` : n >= 1e6 ? `${Math.round(n / 1e6)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
 
 interface RestoreSummary {
   accounts: number;
@@ -21,6 +25,7 @@ interface RestoreSummary {
   customers: number;
   products: number;
   bills: number;
+  photos: number;
   owners: { name: string; email: string }[];
   lastOrderDate: string | null;
   lastChange: string | null;
@@ -53,18 +58,21 @@ export function BackupsPage() {
         <Loading error={q.error} retry={q.refetch} what="backup list" />
       ) : (
         <main className="page stack" style={{ paddingTop: 12 }}>
+          <DiskCard d={b.disk} />
+
           <section className="card stack" style={{ gap: 8 }}>
             <div className="row between">
               <h2>Automatic copies on the server</h2>
               <span className={`badge ${latest ? 'good' : 'warn'}`}>{latest ? 'On' : 'Starting'}</span>
             </div>
             <div className="small muted">
-              Every day Slay copies all orders, customers, payments, stock, supplier bills and accounts, and keeps the last {b.keepDays} days. If something is
-              deleted by mistake or goes wrong, it can be brought back from one of these.
+              Every day Slay copies all orders, customers, payments, stock, supplier bills, accounts <strong>and photos</strong>, and keeps the last {b.keepDays}{' '}
+              days on the permanent disk. A photo is stored once however many days include it, so the copies take little extra space.
             </div>
             {latest ? (
               <div className="small">
-                Latest copy: <strong>{dateTime(latest.createdAt)}</strong> · {b.backups.length} kept
+                Latest copy: <strong>{dateTime(latest.createdAt)}</strong>
+                {latest.photos !== null ? ` with ${latest.photos} photo${latest.photos === 1 ? '' : 's'}` : ''} · {b.backups.length} kept
               </div>
             ) : (
               <div className="small">The first copy is made within the hour.</div>
@@ -78,12 +86,15 @@ export function BackupsPage() {
                 {!b.email.configured ? 'Not set up' : b.email.last?.ok ? 'On' : b.email.last ? 'Problem' : 'Starting'}
               </span>
             </div>
-            <div className="small muted">After each daily copy, Slay emails it to every owner’s email address – a copy off the server, automatically.</div>
+            <div className="small muted">
+              After each daily copy, Slay emails it to every owner – the data and photos as one zip while that’s under 20 MB; above that, the data only (the
+              photos are then in “Save a backup now” below).
+            </div>
             {!b.email.configured ? (
               <div className="small">Email isn’t set up on the server yet (SMTP_URL – see DEPLOY.md, Part 3). Until then, save a copy below once a week.</div>
             ) : b.email.last?.ok ? (
               <div className="small">
-                Last emailed {dateTime(b.email.last.at)} to {b.email.last.to?.join(', ')}.
+                Last emailed {dateTime(b.email.last.at)} to {b.email.last.to?.join(', ')} – {b.email.last.photos ? 'with photos' : 'data only (photos too big for email)'}.
               </div>
             ) : b.email.last ? (
               <div className="small" style={{ color: 'var(--bad)' }}>
@@ -118,7 +129,8 @@ export function BackupsPage() {
               <Icon name="download" size={18} /> Save a backup now
             </a>
             <div className="tiny muted">
-              It’s one small file (slay-backup-date.db.gz) containing everyone’s customer details – keep it private. Product and bill photos aren’t inside it.
+              One zip file (slay-backup-date.zip) with all the data <strong>and every product and bill photo</strong> – it contains everyone’s customer details, so
+              keep it private.
             </div>
           </section>
 
@@ -180,8 +192,8 @@ function RestoreSection() {
     <section className="card stack" style={{ gap: 8 }}>
       <h2>Restore from a backup file</h2>
       <div className="small muted">
-        Brings back the data from a backup you saved (slay-backup-….db.gz, from this page or the daily email). Slay first checks the file and shows what’s
-        inside – nothing changes until you confirm.
+        Brings back the data and photos from a backup you saved (slay-backup-….zip from this page or the daily email; older .db.gz files work too, without
+        photos). Slay first checks the file and shows what’s inside – nothing changes until you confirm. Photos already on the server are kept.
       </div>
 
       {(step.kind === 'idle' || step.kind === 'checking') && (
@@ -216,6 +228,9 @@ function RestoreSection() {
               </span>
               <span>
                 <b>{step.summary.bills}</b> bills
+              </span>
+              <span>
+                <b>{step.summary.photos}</b> photos
               </span>
               <span>
                 <b>{step.summary.accounts}</b> accounts
@@ -260,6 +275,34 @@ function RestoreSection() {
       {error && (
         <div className="small" role="alert" style={{ color: 'var(--bad)' }}>
           {error}
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** How full the server's disk is, and what takes the space. */
+function DiskCard({ d }: { d: BackupInfo['disk'] }) {
+  if (d.total === null || d.usedPct === null) return null;
+  const used = d.total - (d.free ?? 0);
+  return (
+    <section className="card stack" style={{ gap: 8 }}>
+      <div className="row between">
+        <h2>Server disk</h2>
+        <span className={`badge ${d.usedPct >= 90 ? 'bad' : d.warn ? 'warn' : 'good'}`}>{d.usedPct}% used</span>
+      </div>
+      <div className="meter" role="img" aria-label={`${d.usedPct}% of the disk used`}>
+        <div style={{ width: `${Math.min(100, d.usedPct)}%`, background: d.usedPct >= 90 ? 'var(--bad)' : d.warn ? 'var(--warn)' : undefined }} />
+      </div>
+      <div className="small">
+        {bytes(used)} of {bytes(d.total)} used · photos {bytes(d.photos)} · daily copies {bytes(d.backups)} · data {bytes(d.database)}
+      </div>
+      {d.warn && (
+        <div className="alert-banner warning" role="alert">
+          <span>
+            <strong>The disk is getting full.</strong> Make it bigger before it runs out: Render → your Slay service → <strong>Disks</strong> → change the size
+            (data and photos are kept). Then save a backup here.
+          </span>
         </div>
       )}
     </section>

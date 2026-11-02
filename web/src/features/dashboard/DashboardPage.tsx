@@ -87,10 +87,18 @@ export function DashboardPage() {
   const backups = useBackups();
   const sinceBackup = daysSinceDownload(backups.data);
   const backupDue = !!backups.data && (sinceBackup === null || sinceBackup > 7);
+  const diskFull = backups.data?.disk?.warn ? backups.data.disk.usedPct : null;
   return (
     <>
       <TopBar title={`Hi, ${me?.user.displayName}`} actions={<HeaderActions />} />
       <main className="page">
+        {diskFull !== null && (
+          <Link to="/more/backups" className="alert-banner warning" style={{ marginTop: 12 }}>
+            <span>
+              <strong>The server disk is {diskFull}% full.</strong> Make it bigger soon so new orders and photos can still be saved. Tap for details.
+            </span>
+          </Link>
+        )}
         {backupDue && (
           <Link to="/more/backups" className="alert-banner warning" style={{ marginTop: 12 }}>
             <span>

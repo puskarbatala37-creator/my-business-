@@ -16,7 +16,7 @@ import { serveUploads } from './modules/uploads/index.js';
 let restoredFrom: string | null = null;
 function restoreFirst(config: Config) {
   if (config.dbFile === ':memory:') return config.dbFile;
-  restoredFrom = restoreIfRequested(config.dataDir, config.dbFile);
+  restoredFrom = restoreIfRequested(config.dataDir, config.dbFile, config.uploadsDir);
   if (restoredFrom) console.log(`[backups] Restored data from ${restoredFrom}. The data it replaced is in ${config.dataDir}/backups.`);
   return config.dbFile;
 }

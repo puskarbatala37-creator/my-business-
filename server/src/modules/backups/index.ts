@@ -1,9 +1,9 @@
-import express, { Router } from 'express';
+import { Router } from 'express';
 import { z } from 'zod';
 import type { MailService } from '../messaging/mail.js';
 import type { AppModule } from '../../core/context.js';
 import { logActivity, service } from '../../core/context.js';
-import { HttpError, parse } from '../../core/http.js';
+import { parse } from '../../core/http.js';
 import { requireOwner } from '../auth/index.js';
 import type { AlertService } from '../security/service.js';
 import { BackupService, KEEP_DAYS } from './service.js';
@@ -26,25 +26,25 @@ export const backupsModule: AppModule = {
         backups: backups().list(),
         lastDownload: last ? { at: last.at, by: by?.display_name ?? '' } : null,
         email: { configured: !!(ctx.services.mail as MailService | undefined)?.configured, last: backups().lastEmail() },
+        disk: backups().disk(),
       });
     });
+    // One zip with the database and every photo, streamed straight to the phone.
     r.get('/download', async (req, res) => {
-      const data = await backups().forDownload(req.user!.id);
       const stamp = new Date().toISOString().slice(0, 16).replace(/[T:]/g, '-');
-      logActivity(ctx, req.user!.id, 'backup_downloaded', 'backup', null, {});
-      // Downloading everyone's customer data is worth a line in the team's activity log.
-      service<AlertService>(ctx, 'alerts').raise('backup_downloaded', 'info', `${req.user!.displayName} downloaded a backup of all Slay data.`, {}, req.user!.id);
-      res.setHeader('Content-Type', 'application/gzip');
-      res.setHeader('Content-Disposition', `attachment; filename="slay-backup-${stamp}.db.gz"`);
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="slay-backup-${stamp}.zip"`);
       res.setHeader('Cache-Control', 'no-store');
-      res.end(data);
+      const r = await backups().streamDownload(res, req.user!.id);
+      logActivity(ctx, req.user!.id, 'backup_downloaded', 'backup', null, { photos: r.photos });
+      // Downloading everyone's customer data is worth a line in the team's activity log.
+      service<AlertService>(ctx, 'alerts').raise('backup_downloaded', 'info', `${req.user!.displayName} downloaded a backup of all Slay data and photos.`, {}, req.user!.id);
     });
 
     // Restore, step 1: check the chosen backup file and say what's inside. Changes nothing.
-    r.post('/restore/check', express.raw({ type: () => true, limit: '200mb' }), (req, res) => {
-      const body = req.body as Buffer;
-      if (!Buffer.isBuffer(body) || !body.length) throw new HttpError(400, 'Choose a backup file first.');
-      res.json(backups().checkRestore(body));
+    // The file is saved straight to disk as it arrives (a zip with photos can be large).
+    r.post('/restore/check', async (req, res) => {
+      res.json(await backups().checkRestore(req));
     });
 
     // Restore, step 2 (after the owner confirms): swap the backup in on a restart.

@@ -4,24 +4,30 @@
 
 | Layer | What it covers | Protects against | Who does it |
 |---|---|---|---|
-| **1. Daily copies on the server** (built into Slay) | Everything in the database: orders, customers, payments, stock, supplier-bill details, team accounts, settings. One copy a day, the last **7** kept in `DATA_DIR/backups/` on the permanent disk (copies made before a restore are never removed). | Something deleted or changed by mistake; a damaged database file. | Automatic. |
-| **1b. The daily copy by email** (built into Slay) | The same daily copy, compressed (`slay-backup-<date>.db.gz`), emailed to every owner. | Losing the server or its disk – a copy off the server every day without anyone remembering. | Automatic once email is set up (`SMTP_URL`, `MAIL_FROM` – DEPLOY.md Part 3). **More → Backups** shows when it was last sent, or why not. |
-| **2. A copy off the server** (built into Slay) | The same data, as one small file `slay-backup-<date>.db.gz`. | Losing the server or its disk altogether. | An owner taps **More → Backups → Save a backup now**, then keeps the file in Google Drive / iCloud / email. Slay shows a reminder on the Home screen when the last one is more than 7 days old. |
-| **3. Host's volume backups** (recommended) | The whole `/data` volume – database **and photos**. | Losing the server, including product and bill photos. | Turn on in the hosting dashboard (Railway: open the volume → *Backups*, if your plan offers it; choose daily). |
+| **1. Daily copies on the server** (built into Slay) | Everything: orders, customers, payments, stock, supplier-bill details, team accounts, settings (`backups/slay-<day>.db`) **and every photo** (`backups/photos-<day>/`). The last **7** days are kept on the permanent disk; copies made before a restore are never removed. | Something deleted or changed by mistake; a damaged database file; a photo removed by mistake. | Automatic. |
+| **1b. The daily copy by email** (built into Slay) | Emailed to every owner: the data **and photos** as one zip (`slay-backup-<day>.zip`) while that's under 20 MB; above that, the data only (`slay-backup-<day>.db.gz`) and the email says the photos are in the manual backup. | Losing the server or its disk – a copy off the server every day, without anyone remembering. | Automatic once email is set up (`SMTP_URL`, `MAIL_FROM` – DEPLOY.md Part 3). **More → Backups** shows when it was last sent, with or without photos, or why not. |
+| **2. Manual backup** (built into Slay) | One zip, `slay-backup-<date>.zip`: the database (`slay.db`), **every product, order and bill photo** (`uploads/…`) and a label (`slay-backup.json`). | Losing the server or its disk altogether. | An owner taps **More → Backups → Save a backup now** and keeps the file in Google Drive / iCloud / email. Slay reminds owners when the last one is more than 7 days old. |
+| **3. Host's disk snapshots** | The whole `/data` disk. | Losing the server. | Render takes them daily (service → Disks). |
 
-**Photos** (product colours, order items, supplier bills) are files on the server's disk, not inside layers 1–2.
-Only layer 3 keeps them. Losing them doesn't lose any order or payment data.
+**Disk space.** Photos are shrunk on the phone before upload (longest side 1,400 px, JPEG), and they
+never change afterwards – so each daily copy *hard-links* the photo files instead of copying them: a
+photo uses disk space once however many daily copies include it (zipping JPEGs wouldn't make them
+smaller). **More → Backups → Server disk** shows how full the disk is and what takes the space; it
+warns from 80%, the Home screen shows a warning too, and owners get a notification from 90% (at most
+once a day). To make room, increase the disk size in Render (service → Disks) – data and photos are kept.
 
 ## Restoring
 
 **From the app (owners):** **More → Backups → Restore from a backup file**.
 
-1. Choose the backup – a downloaded `slay-backup-….db.gz` or the one attached to a daily email.
-2. Slay **only checks it** first and shows what's inside (orders, customers, products, bills,
+1. Choose the backup – a `slay-backup-….zip` (data and photos), or an older `slay-backup-….db.gz`
+   (data only), from this page or a daily email.
+2. Slay **only checks it** first and shows what's inside (orders, customers, products, bills, photos,
    accounts, owners, last order). A file that isn't a Slay backup, or was made by a newer Slay, is
    refused. Nothing has changed yet.
 3. Switch on *I want to restore this backup* → **Restore this backup**. Slay keeps the current data as
-   `DATA_DIR/backups/before-restore-<time>.db`, swaps the backup in and restarts (up to a minute).
+   `DATA_DIR/backups/before-restore-<time>.db`, swaps the backup in, **adds its photos** (photos already
+   on the server are never replaced or removed) and restarts (up to a minute).
 4. Sign in with an account from the backup. The team gets a "data was restored" notice.
 
 On a brand-new, empty server there is no owner yet: create a **temporary** owner on the setup
